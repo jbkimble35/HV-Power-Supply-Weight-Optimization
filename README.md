@@ -12,3 +12,6 @@ Current issues I have identified: (delete as needed)
 -  Need to ensure realism of data through cross-checking with more of the thesis results. Transformer comparison has already been done and is in the comparison .xlsx file
 -  Need to comment what each block of code is doing for readability and debugging
 -  Need to add error handling and debugging printing in the terminal for common issues and diagnosis of problems.
+
+Currently working on:
+- I am going to edit this script so that it takes into account higher-voltage transformer design parameters, such as volts-per-layer, epoxy potting, and interlayer tape.
