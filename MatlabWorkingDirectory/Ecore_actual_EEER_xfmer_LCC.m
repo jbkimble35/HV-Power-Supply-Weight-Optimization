@@ -1,6 +1,13 @@
 function y = Ecore_actual_EEER_xfmer_LCC(raw,raw1,raw2,raw3,raw4,raw5,raw6, ...
     Vppeak_range, Vspeak_range, Po_range, fs_range, Vinsulation_max_range, Winding_Pattern)
 
+% Now I am going to edit this script so that it takes into account higher-voltage transformer design parameters, such as volts-per-layer, epoxy potting, and interlayer tape.
+UsePotting      = true;      % set true if vacuum-potted/encapsulated
+Potting_DS      = 20e6;      % V/m, encapsulant dielectric strength (adjust per datasheet)
+CoronaMargin    = 2.0;       % safety factor vs ideal breakdown
+Vlayer_max      = 200;       % V allowed per secondary layer
+
+
 %% Tunable Parameters
 
 % Minimum transformer efficiency
