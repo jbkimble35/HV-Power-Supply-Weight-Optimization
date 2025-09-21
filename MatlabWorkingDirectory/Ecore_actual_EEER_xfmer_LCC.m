@@ -10,6 +10,20 @@ UsePotting      = true;      % set true if vacuum-potted/encapsulated
 Potting_DS      = 20e6;      % V/m, encapsulant dielectric strength (adjust per datasheet)
 CoronaMargin    = 2.0;       % safety factor vs ideal breakdown
 Vlayer_max      = 200;       % V allowed per secondary layer
+% Need to replace core insulation thickness with a new value, need to take
+% into account the epoxy between wires in each layer and between layers,
+% need to include secondary layer stress and interlayer tape, need to
+% filter designs by their volts-per-layer.
+
+% For HV secondaries, the considerations should be:
+% Smallest magnet wire applicable with high class enamel for auxiliary
+% insulation, then Kapton interlayer tape as thick as possible, making sure
+% to apply some to the edges to prevent arcing on the sides, then
+% potting with HV potting epoxy, then make sure the exit nodes have a
+% suitable airgap and are shielded with HV insulation, joined through some
+% HV heat shrink or rounded soldering inside the epoxy so that outside the
+% transformer is only subject to shielded HV cable.
+% Make sure to apply 2.5-3x safety factor.
 
 
 %% Tunable Parameters
