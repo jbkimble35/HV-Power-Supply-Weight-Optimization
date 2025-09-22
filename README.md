@@ -21,3 +21,4 @@ Recent changes:
 - Both winding pattern options work now, center and double-leg, based on the thesis text.
 - U and UR core implementations for the winding pattern and insulation were included, since they weren't before.
 - Made it more efficient by allowing GPU computation on some of the most computation-intensive array functions, which were tested with the code profiler toolbox
+- Multiple core densities can be used in candidate design sweep
