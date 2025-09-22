@@ -187,26 +187,20 @@ end
 % Core size data parsing
 [m1,~] = size(raw);
 TransformerCoreIndex = cell2mat(raw(2:m1,1));
-
 % Effective core volume in m^3
 XcoreVe = cell2mat(raw(2:m1,3))/(1000^3);
-
 % Cross-sectional area in m^2
 XcoreAe = cell2mat(raw(2:m1,4))/(1000^2);
-
 % Magnetic path length in m
 XcoreLe = cell2mat(raw(2:m1,5))/1000;
 
 % 1 for EE, 2 for ER, will be 3 for U and 4 for UR
 XcoreCoreShapeIndex = cell2mat(raw(2:m1,6));
-
 % Primary winding window dimensions in m
 XcorePriW = cell2mat(raw(2:m1,8))/1000;
 XcorePriH = cell2mat(raw(2:m1,9))/1000;
-
 % Not used here for some reason
 XcoreSecW = cell2mat(raw(2:m1,10))/1000; %#ok<NASGU>
-
 % Not used here for some reason
 XcoreSecH = cell2mat(raw(2:m1,11))/1000; %#ok<NASGU>
 
@@ -377,7 +371,8 @@ beta = beta_range(matno_record,:) .* matfsIndex;
 [UniqueRowIdcs, ~] = unique(rowIdcs, 'rows');
 ColDuplicate = sum(matfs(UniqueRowIdcs,:) ~= 0, 2);
 
-% Each parameter is copied for each valid frequency
+
+% Repeat by the number of loss data of each design point
 Po                  = repelem(Po(UniqueRowIdcs), ColDuplicate);
 fs                  = repelem(fs(UniqueRowIdcs), ColDuplicate);
 Vin                 = repelem(Vin(UniqueRowIdcs), ColDuplicate);
@@ -401,35 +396,34 @@ airgap              = repelem(airgap(UniqueRowIdcs), ColDuplicate);
 XcoreIndex          = repelem(XcoreIndex(UniqueRowIdcs), ColDuplicate);
 XcoreCoreShapeIndex = repelem(XcoreCoreShapeIndex(UniqueRowIdcs), ColDuplicate);
 
-% Reformats valid frequency values and steinmetz loss data into column vectors
+% Reformat loss data into one non-zero vector
 matfs = nonzeros(reshape(matfs(UniqueRowIdcs,:)',[],1));
 K1 = nonzeros(reshape(K1(UniqueRowIdcs,:)',[],1));
 beta = nonzeros(reshape(beta(UniqueRowIdcs,:)',[],1));
 alpha = nonzeros(reshape(alpha(UniqueRowIdcs,:)',[],1));
 
-% Checks if valid designs exist, throws error if not.
-% Otherwise, design computations continue.
 size(Po)
 if (isempty(Po))
     warning('No successful inductor results Test1, Inductor.');
     y = 0;
 else
-    
-    % Estimate strand size and calculate strand count needed for primary winding.
+    % Repeat elements by Primary Wire Number of Strands
     skindepth = 1./sqrt(pi*fs*u0/rou);
+    % Overwritten variable
     ds = max(skindepth, MinLitzDia*ones(size(skindepth))); % take the skin depth litz
+
     MinPriNstrands = floor((Imax./Jwmax)./(pi*ds.^2/4))+1;
     MaxPriNstrands = floor((Imax./Jwmax*1.0)./(pi*ds.^2/4))+1;
 
-    % Tests for validity
+    % Test
     priCount = MaxPriNstrands - MinPriNstrands + 1;
     if any(priCount < 1)
         bad = find(priCount < 1, 1);
         error('Strands:BadPrimaryCounts', ...
               'Computed primary strand counts <=0 at row %d. Check Po, Vppeak, Jwmax, MinLitzDia.', bad);
     end
-
-    % Replicates all design parameters so each possible primary strand configuration has a full matching set of values.
+    % Testend
+        
     Po                  = repelem(Po, priCount);
     fs                  = repelem(fs, priCount);
     Vin                 = repelem(Vin, priCount);
@@ -457,40 +451,47 @@ else
     XcoreIndex          = repelem(XcoreIndex, priCount);
     XcoreCoreShapeIndex = repelem(XcoreCoreShapeIndex, priCount);
 
-    % Generates a column vector of all possible primary strand counts between the calculated minimum and maximum, repeated for each design case.
+
     Pri_Nstrands = repmat((MinPriNstrands(1):1:MaxPriNstrands(1))', length(MaxPriNstrands), 1);
 
-    % Computes RMS primary current, effective core permeability with air gap, and peak flux density.
+    % Calculate core loss (W)
     Iprms = Imax ./ sqrt(2);
     ue = ui ./ (1 + ui .* airgap ./ Le);
     Bm = u0.*Np.*Imax./Le.*ue;
+    %(changed from /ue to *ue)
 
     % Window area
     Wa = H .* W;
     % Core volume (m3)
     Vcore = Ve;
     % Core weight (g)
-    Wcore = Vcore .* CoreDensity;
+    densityRow = CoreDensity(matno_record);
+    assert(numel(densityRow)==numel(Vcore),'Core density mapping mismatch');
+    Wcore = Vcore.*densityRow;
     % Check core loss
     Pcore = CoreLossMultiple .* Vcore .* K1 .* fs.^alpha .* Bm.^beta;
 
     %% Wire
 
-    % Calculates conductor skin depth and sets strand diameter to the larger of skin depth or minimum litz size.
+    % Recalculate ds
     skindepth = 1 ./ sqrt(pi * fs * u0 / rou);
-    ds = max(skindepth, MinLitzDia * ones(size(skindepth)));
+    % Overwritten variable
+    ds = max(skindepth, MinLitzDia * ones(size(skindepth))); %#ok<NASGU> % take the skin depth litz
+    ds = MinLitzDia * ones(size(skindepth)); % take the smallest litz
     
     % Primary wire diameter (m)
     Pri_WireSize = sqrt(Pri_Nstrands.*pi.*ds.^2./4./LitzFactor./pi).*2;
     
     % Primary wire diameter (m) including the insulation layer
     Pri_FullWireSize = Pri_WireSize+((Vpri./Np)./dielectricstrength_insulation).*2;
+    % changed from Vin to Vpri./Np
 
     % Packing factors
     CopperPacking = (pi.*Pri_WireSize.^2.*Np./4)./(H.*W);
     OverallPacking = (pi.*Pri_FullWireSize.^2.*Np./4)./(H.*W);
     
     % Winding structures
+    % Core insulation thickness needed
     CoreInsulationThickness = Vinsulation_max./dielectricstrength_insulation;
     
     % Turns per layer
@@ -575,7 +576,6 @@ else
         % Preallocate Design_inductor
         Design_inductor = zeros(numel(TotalWeightSortIndex), 43);
 
-        % Fills each column with their respective data, then returns the table as an output for the function.
         Design_inductor(:, 1)  = Po(TotalWeightSortIndex);
         Design_inductor(:, 2)  = Vin(TotalWeightSortIndex);
         Design_inductor(:, 3)  = Vpri(TotalWeightSortIndex);
