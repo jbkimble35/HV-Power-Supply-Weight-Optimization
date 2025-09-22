@@ -79,20 +79,14 @@ Transformer:
 % core loss data provided in the manufacturer's datasheet 
 
 % Large Dataset (Memory Issues with PC)
-% corelossfile = 'CoreLossData.xlsx';
-% raw1 = readcell('CoreLossData.xlsx','Sheet','Freq');
-% raw2 = readcell('CoreLossData.xlsx','Sheet','Bfield');
-% raw3 = readcell('CoreLossData.xlsx','Sheet','Ploss');
-% raw4 = readcell('CoreLossData.xlsx','Sheet','BSAT');
-% raw5 = readcell('CoreLossData.xlsx','Sheet','MU');
 
-corelossfile = 'CoreLossDataOLD.xlsx';
-raw1 = readcell('CoreLossDataOLD.xlsx','Sheet','Freq');
-raw2 = readcell('CoreLossDataOLD.xlsx','Sheet','Bfield');
-raw3 = readcell('CoreLossDataOLD.xlsx','Sheet','Ploss');
-raw4 = readcell('CoreLossDataOLD.xlsx','Sheet','BSAT');
-raw5 = readcell('CoreLossDataOLD.xlsx','Sheet','MU');
-raw6 = readcell('CoreLossDataOLD.xlsx','Sheet','Density');
+corelossfile = 'CoreLossData.xlsx';
+raw1 = readcell('CoreLossData.xlsx','Sheet','Freq');
+raw2 = readcell('CoreLossData.xlsx','Sheet','Bfield');
+raw3 = readcell('CoreLossData.xlsx','Sheet','Ploss');
+raw4 = readcell('CoreLossData.xlsx','Sheet','BSAT');
+raw5 = readcell('CoreLossData.xlsx','Sheet','MU');
+raw6 = readcell('CoreLossData.xlsx','Sheet','Density');
 
 % SizeData:
 
@@ -112,12 +106,8 @@ raw6 = readcell('CoreLossDataOLD.xlsx','Sheet','Density');
 % coreWindowHeight]
 % all units are mm, or mm^2, or mm^3
 
-% Large Dataset (Memory Issues with PC)
-% coresizefile = 'CoreSizeData.xlsx';
-% raw = readcell('CoreSizeData.xlsx','Sheet','Ecore');
-
-coresizefile = 'CoreSizeDataOLD.xlsx';
-raw = readcell('CoreSizeDataOLD.xlsx','Sheet','Ecore');
+coresizefile = 'CoreSizeData.xlsx';
+raw = readcell('CoreSizeData.xlsx','Sheet','Ecore');
 
 %% Parameters to Adjust
 
@@ -125,35 +115,30 @@ Date = 'xxx';
 % Quality factor
 Q_range = 0.1:0.1:5;
 % Resonant frequency
-f0_range = 4000;
+f0_range = 4100;
 % Capacitance ratio
 A_range = 0.1:0.1:5;
 % Turns ratio
-K_range = 1:1:100;
+K_range = 35:1:40;
 % DC input voltage range
 % Doesn't work with arrays for some reason.
-Vin_range = 100;
+Vin_range = 800;
 % Peak amplitude of the output voltage that one hope to achieve (V)
 % Doesn't work with arrays for some reason.
-Vo_range = 4000;
+Vo_range = 30000;
 % Output power desired (W)
-Po_range = 200;
+Po_range = 100;
 % frequency of the transformer
 fs_range = 4000;
 
-
-%[3981,6310,10000,15849,25119,...
-%   39811,63096,100000,158489,251189,398107,630957,1000000];
-
 % Winding Pattern index: 1 indicates center leg winding, 2 indicates double
-Winding_Pattern = 1;
+Winding_Pattern = 2;
 % Hypothesis: record why you want to run the sim
 Hypothesis ='';
 % Notes: record any changes you made to the code
 Notes ='';
 
 %% File Output
-
 
 % File output configuration
 filename_xfmer = strcat(Date,'_','TestXfmer.xlsx');
@@ -254,7 +239,7 @@ for i = 1:length(Q)
 
     % Run Xfmer design, return design vector. All CoreLoss and CoreSize
     % data is passed, along with primary voltage, secondary voltage, output
-    % power goal, switching frequency goal, max insulation stress, and
+    % power goal, switching frequency goal, max insulation stress, and^
     % winding pattern. None of the resonant tank sweep values are passed
     % here. Only the GT and K are relevant for the transformer design and
     % are what are being sweeped within this for loop through Vpri, Vinsulation_max,
