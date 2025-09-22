@@ -13,6 +13,7 @@ Current issues I have identified: (delete as needed)
 
 Currently working on:
 - I am going to edit this script so that it takes into account higher-voltage transformer design parameters, such as volts-per-layer, epoxy potting, and interlayer tape.
+- I need to edit the inductor script to solve some of the same issues I solved in the transformer one, i.e. adding a GPU option and solid core vs. litz wire option
 
 Recent changes:
 - Added GPU computing options for this transformer script, but the old CPU options also work
