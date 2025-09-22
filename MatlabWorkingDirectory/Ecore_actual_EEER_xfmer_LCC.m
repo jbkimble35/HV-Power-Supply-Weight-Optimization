@@ -1,7 +1,6 @@
 function y = Ecore_actual_EEER_xfmer_LCC(raw,raw1,raw2,raw3,raw4,raw5,raw6, ...
     Vppeak_range, Vspeak_range, Po_range, fs_range, Vinsulation_max_range, Winding_Pattern)
 
-
 % Now I am going to edit this script so that it takes into account higher-voltage 
 % transformer design parameters, such as volts-per-layer, epoxy potting, and interlayer tape.
 % The inductor is much lower voltage since it's on the primary side, so it
@@ -25,9 +24,11 @@ Vlayer_max      = 200;       % V allowed per secondary layer
 % transformer is only subject to shielded HV cable.
 % Make sure to apply 2.5-3x safety factor.
 
-
 %% Tunable Parameters
 
+% GPU computing options
+useGPU = true;            % <— flip this to enable/disable GPU path
+useSingleOnGPU = false;    % single precision halves memory on the GPU
 % Minimum transformer efficiency
 etaXfmer = 0.85;
 % Max operating temp in Celsius
@@ -47,27 +48,32 @@ MaxPriWinding = 500;
 % Incremental primary winding
 IncreNp = 1;
 % Maximum layer of primary winding
-MaxMlp = 20;
+MaxMlp = 10;
 % Incremental layer of primary winding
 IncreMlp = 1;
 % Maximum layer of secondary winding
-MaxMls = 20;
+MaxMls = 50;
 % Incremental layer of secondary winding
 IncreMls = 1;
 % Minimum secondary wire diameter (m)
 MinSecWireSize = 0.4e-3;             %#ok<NASGU>
 % Max allowable transformer weight (g)
-MaxWeight = 3000;
+MaxWeight = 300000;
 CoreInsulationDensity = 2.2e6;       % g/m^3 (Teflon)
 WireInsulationDensity = 2.2e6;       % g/m^3 (Teflon)
 % Saturation flux density derating
 BSAT_discount = 0.9;
 % Core loss multiplier
 CoreLossMultiple = 1.5;
-maxpackingfactor = 0.8;
+maxpackingfactor = 0.99;
 minpackingfactor = 0.01;
 % Litz copper fill
 LitzFactor = 0.8;
+% For solid core:
+SolidGate = 1.5; % factor of skindepth threshold to go from solid to litz
+t_turn_p = 40e-6;     % primary enamel/varnish build per side (≈ Class 200 wire)
+t_turn_s = 60e-6;     % secondary enamel/varnish build per side (often thicker)
+
 % Not used directly here
 BobbinWeightFactor = 0.5;             %#ok<NASGU>
 
@@ -85,6 +91,15 @@ u0 = 4*pi*1e-7;
 ebs10 = 8.854*1e-12; %#ok<NASGU>
 
 %% Body of function
+
+if useSingleOnGPU
+    toGPU    = @(x) gpuArray(single(x));
+    toScalar = @(x) single(x);
+else
+    toGPU    = @(x) gpuArray(x);
+    toScalar = @(x) x;
+end
+toHost = @(x) gather(x);
 
 % Save design results
 Design = zeros(1,44);
@@ -269,7 +284,7 @@ XcoreCoreShapeIndex = XcoreCoreShapeIndex(ShuffleXcoreIndex);
 % Quick BSAT feasibility using datasheet formula
 Bm_dummy = Vppeak/pi./fs./(2*Np.*Ac);
 Keep_Bmindex = find(Bm_dummy < BSAT*BSAT_discount);
-KeepIndex = Keep_Bmindex; %#ok<NASGU>
+KeepIndex = Keep_Bmindex;
 
 Po                   = Po(KeepIndex);
 fs                   = fs(KeepIndex);
@@ -329,7 +344,7 @@ beta = beta_range(matno_record,:).*matfsIndex;
 
 % Find the indices of unique values in rowIdcs
 [UniqueRowIdcs, ~] = unique(rowIdcs,'rows');
-ColDuplicate = sum(matfs(UniqueRowIdcs,:)~=0,2); %#ok<NASGU>
+ColDuplicate = sum(matfs(UniqueRowIdcs,:)~=0,2);
 
 % Test
 if isempty(rowIdcs)
@@ -373,93 +388,12 @@ alpha = nonzeros(reshape(alpha(UniqueRowIdcs,:)',[],1));
 if (isempty(Po))
     y = 0;
 else
-    %Repeat elements by Primary Wire Number of Strands
+
+    % Here, a suitable wire size for primary and secondary is chosen to
+    % meet current density limit and keep reasonable AC losses. That wire
+    % size is then used to match everything else.
+
     skindepth = 1./sqrt(pi*fs*u0/rou);
-    %ds = max(skindepth ,MinLitzDia*ones(size(skindepth))); % take the skin depth litz
-    ds = MinLitzDia*ones(size(skindepth));
-    MinPriNstrands = floor((Po*2/etaXfmer./Vppeak/Jwmax)./(pi*ds.^2/4))+ 1;
-    MaxPriNstrands = floor((Po*2/etaXfmer./Vppeak/Jwmax*1.0)./(pi*ds.^2/4))+ 1;
-    
-
-    % Test
-    priCount = MaxPriNstrands - MinPriNstrands + 1;
-    if any(priCount < 1)
-        bad = find(priCount < 1, 1);
-        error('Strands:BadPrimaryCounts', ...
-              'Computed primary strand counts <=0 at row %d. Check Po, Vppeak, Jwmax, MinLitzDia.', bad);
-    end
-    % Testend
-   
-    Po                  = repelem(Po, priCount);
-    fs                  = repelem(fs, priCount);
-    Vppeak              = repelem(Vppeak, priCount);
-    Vspeak              = repelem(Vspeak, priCount);
-    Vinsulation_max     = repelem(Vinsulation_max, priCount);
-    matno_record        = repelem(matno_record, priCount);
-    ui                  = repelem(ui, priCount);
-    BSAT                = repelem(BSAT, priCount);
-    Ve                  = repelem(Ve, priCount);
-    Ac                  = repelem(Ac, priCount);
-    Le                  = repelem(Le, priCount);
-    W                   = repelem(W, priCount);
-    H                   = repelem(H, priCount);
-    PriW                = repelem(PriW, priCount);
-    PriH                = repelem(PriH, priCount);
-    SecW                = repelem(SecW, priCount);
-    SecH                = repelem(SecH, priCount);
-    XcoreIndex          = repelem(XcoreIndex, priCount);
-    XcoreCoreShapeIndex = repelem(XcoreCoreShapeIndex, priCount);
-    Np                  = repelem(Np, priCount);
-    Mlp                 = repelem(Mlp, priCount);
-    Mls                 = repelem(Mls, priCount);
-    matfs               = repelem(matfs, priCount);
-    K1                  = repelem(K1, priCount);
-    beta                = repelem(beta, priCount);
-    alpha               = repelem(alpha, priCount);
-
-
-    Pri_Nstrands = repmat((MinPriNstrands(1):1:MaxPriNstrands(1))',length( ...
-        MaxPriNstrands),1);
-
-    % Secondary: fixed to specific litz family (178-5790) -> 19 strands
-    skindepth = 1./sqrt(pi*fs*u0/rou);
-    ds = max(skindepth, MinLitzDia*ones(size(skindepth)));
-    MinSecNstrands = 19*ones(size(skindepth));%178-5790 has 19 strands.
-    MaxSecNstrands = 19*ones(size(skindepth));%178-5790 has 19 strands.
-    secCount = MaxSecNstrands - MinSecNstrands + 1; %#ok<NASGU>
-    
-    Po                  = repelem(Po, secCount);
-    fs                  = repelem(fs, secCount);
-    Vppeak              = repelem(Vppeak, secCount);
-    Vspeak              = repelem(Vspeak, secCount);
-    Vinsulation_max     = repelem(Vinsulation_max, secCount);
-    matno_record        = repelem(matno_record, secCount);
-    ui                  = repelem(ui, secCount);
-    BSAT                = repelem(BSAT, secCount);
-    Ve                  = repelem(Ve, secCount);
-    Ac                  = repelem(Ac, secCount);
-    Le                  = repelem(Le, secCount);
-    W                   = repelem(W, secCount);
-    H                   = repelem(H, secCount);
-    PriW                = repelem(PriW, secCount);
-    PriH                = repelem(PriH, secCount);
-    SecW                = repelem(SecW, secCount);
-    SecH                = repelem(SecH, secCount);
-    XcoreIndex          = repelem(XcoreIndex, secCount);
-    XcoreCoreShapeIndex = repelem(XcoreCoreShapeIndex, secCount);
-    Np                  = repelem(Np, secCount);
-    Mlp                 = repelem(Mlp, secCount);
-    Mls                 = repelem(Mls, secCount);
-    matfs               = repelem(matfs, secCount);
-    K1                  = repelem(K1, secCount);
-    beta                = repelem(beta, secCount);
-    alpha               = repelem(alpha, secCount);
-    Pri_Nstrands        = repelem(Pri_Nstrands, secCount);
-
-    Sec_Nstrands = repmat((MinSecNstrands(1):1:MaxSecNstrands(1))',length( ...
-        MaxSecNstrands),1);
-
-
     % Electricals & losses
     k  = Vspeak./Vppeak;
     Ns = round(Np.*k)+1;
@@ -469,13 +403,10 @@ else
     % Secondary Current
     Isrms  = Po./(Vspeak/sqrt(2));
     Ispeak = Isrms*sqrt(2);
-    skindepth = 1./sqrt(pi*fs*u0/rou);
-    ds = max(skindepth, MinLitzDia*ones(size(skindepth)));
-    
-    % Flux and core loss
-    lamda = Vppeak./pi./fs;         % volt-second per radian
-    % Check this value^
+    % Required copper area
 
+    % Flux and core loss
+    lamda = Vppeak./pi./fs;
     % Equivalent load resistor
     Rload = Vspeak.*Vspeak./2./Po;
     % Input power (W)
@@ -492,19 +423,43 @@ else
     Bm = lamda./(2.*Np.*Ac);
     % Calculate core loss (W)
     Pcore = CoreLossMultiple.*Vcore.*K1.*fs.^alpha.*Bm.^beta;
+
+    Areq_p=Iprms./Jwmax;                                % [m^2]
+    Areq_s=Isrms./Jwmax;                                % [m^2]
     
-    % Wire
-    % Primary wire diameter (m)
-    Pri_WireSize = sqrt(Pri_Nstrands.*pi.*ds.^2./4./LitzFactor./pi).*2;
-    % Primary wire diameter (m) including the insulation layer
-    Pri_FullWireSize = Pri_WireSize + (Vppeak./dielectricstrength_insulation).*2;
-    % Secondary wire diameter (m)
-    Sec_WireSize = sqrt(Sec_Nstrands.*pi.*ds.^2./4./LitzFactor./pi).*2;
-    % Secondary wire diameter (m) including the insulation layer
-    Sec_FullWireSize = Sec_WireSize + (Vspeak./dielectricstrength_insulation/2).*2; %#ok<NASGU>
-        % ^for above line, 100% dielectric strength, similar with Rubadue data
-    % For 178-5790 only
-    Sec_FullWireSize = 1.016./1000*ones(size(Sec_WireSize));
+    dsolid_p=2.*sqrt(Areq_p./pi);                       % [m]
+    dsolid_s=2.*sqrt(Areq_s./pi);                       % [m]
+    
+    useSolid_p=(dsolid_p<=SolidGate.*(2.*skindepth));
+    useSolid_s=(dsolid_s<=SolidGate.*(2.*skindepth));
+    
+    dstrand_litz=max(MinLitzDia,2.*skindepth);          % [m]
+    Astrand=pi.*(dstrand_litz./2).^2;                   % [m^2]
+    
+    % Primary
+    Pri_Nstrands=ones(size(Iprms));
+    Pri_Nstrands(~useSolid_p)=ceil(Areq_p(~useSolid_p)./Astrand(~useSolid_p));
+    Pri_WireSize=dsolid_p;
+    idx=~useSolid_p;
+    if any(idx)
+        Pri_WireSize(idx)=2.*sqrt((Pri_Nstrands(idx).*Astrand(idx))./(pi.*LitzFactor));
+    end
+    Pri_ds=dsolid_p;                                     % effective strand dia for AC model
+    Pri_ds(idx)=dstrand_litz(idx);
+    Pri_FullWireSize=Pri_WireSize+(Vppeak./dielectricstrength_insulation).*2;
+    
+    % Secondary
+    Sec_Nstrands=ones(size(Isrms));
+    Sec_Nstrands(~useSolid_s)=ceil(Areq_s(~useSolid_s)./Astrand(~useSolid_s));
+    Sec_WireSize=dsolid_s;
+    idx=~useSolid_s;
+    if any(idx)
+        Sec_WireSize(idx)=2.*sqrt((Sec_Nstrands(idx).*Astrand(idx))./(pi.*LitzFactor));
+    end
+    Sec_ds=dsolid_s;                                     % effective strand dia for AC model
+    Sec_ds(idx)=dstrand_litz(idx);
+    Sec_FullWireSize=Sec_WireSize+(Vspeak./dielectricstrength_insulation).*2;
+
     CopperPacking = (pi.*Pri_WireSize.^2.*Np./4 + pi.*Sec_WireSize.^2.* ...
         Ns/2./4)./(H.*W);
     OverallPacking = (pi.*Pri_FullWireSize.^2.*Np./4 + pi.*Sec_FullWireSize ...
@@ -514,55 +469,132 @@ else
     CoreInsulationThickness  = Vinsulation_max./dielectricstrength_insulation;
     Pri_PerLayer=floor(Np./Mlp);
     Sec_PerLayer=floor(Ns./Mls);
-
-    % Winding pattern of secondary
-    % For ER, only allow center leg winding
-    switch Winding_Pattern
-        case 1 %center leg
-            % Secondary turns per layer
-            Sec_PerLayer = floor(Ns./Mls);
-            % Number of rows in section 1, co-center with primary
-            Ns_group1 = floor((H - 2*CoreInsulationThickness)./Sec_FullWireSize);
-            Ns_group2 = zeros(size(Ns_group1));
-            Ns_group3 = zeros(size (Ns_group1));
-            Ns_group4 = zeros(size(Ns_group1));
-            % Supposed secondary winding number if wind as mentioned above
-            SupposeNs = Ns_group1.*Mls;
-            %% Total length of windings
-            TLp = Np.*2.*(PriW + PriH + 4*CoreInsulationThickness + 2.* ...
-                Mlp.*Pri_FullWireSize);
-            TLs= Ns.*2.*(PriW + PriH + 4*Mlp.*Pri_FullWireSize + 8* ...
-                CoreInsulationThickness + 2.*Mls.*Sec_FullWireSize);
-            % Recalculate XcoreCoreShapeIndex == 2, ER cores
-            SelecIndex = find(XcoreCoreShapeIndex == 2);
-            TLp(SelecIndex) = 2.*pi.*Np(SelecIndex).*(PriW(SelecIndex)./2 + ...
-                CoreInsulationThickness(SelecIndex) + 0.5.*Mlp(SelecIndex) ...
-                .*Pri_FullWireSize(SelecIndex));
-            TLs(SelecIndex) = 2.*pi.*Ns(SelecIndex).*(PriW(SelecIndex)./2+ ...
-            Mlp(SelecIndex).*Pri_FullWireSize(SelecIndex) + 2*CoreInsulationThickness ...
-            (SelecIndex) + 0.5.*Mls(SelecIndex).*Sec_FullWireSize(SelecIndex));
-        case 2 %double leg
-            %% Winding pattern
-            % Only consider half because symmetric
-            Sec_PerLayer = floor(Ns./2./Mls);
-            % Winding on double leg
-            Ns_group1 = zeros(size(Sec_PerLayer)); % does not wind on center leg
-            Ns_group2 = floor((W - 3*CoreInsulationThickness - Mlp.* ...
-            Pri_FullWireSize)./Sec_FullWireSize);
-            Ns_group3 = floor((H - 2*CoreInsulationThickness - 2*Mls.* ...
-                Sec_FullWireSize)./Sec_FullWireSize);
-            Ns_group4 = Ns_group2;
-            SupposeNs = Ns_group1.*Mls + Ns_group2.*Mls + Ns_group3.*...
-            Mls + Ns_group4.*Mls;
-            %% Total length of windings
-            TLp = Np.*2.*(PriW + PriH + 4*CoreInsulationThickness + 2.*Mlp.* ...
-                Pri_FullWireSize);
-            TLs = Ns.*2.*(SecW + SecH + 4*CoreInsulationThickness + 2.*Mls.* ...
-                Sec_FullWireSize);
-        otherwise
-            warning('Wrong winding pattern');
-    end
     
+    if useGPU
+        % Move inputs for this block to GPU
+        shape_g    = toGPU(int32(XcoreCoreShapeIndex));
+        np_g       = toGPU(Np);
+        ns_g       = toGPU(Ns);
+        priW_g     = toGPU(PriW);
+        priH_g     = toGPU(PriH);
+        secW_g     = toGPU(SecW);
+        secH_g     = toGPU(SecH);
+        tcore_g    = toGPU(CoreInsulationThickness);
+        mlp_g      = toGPU(Mlp);
+        mls_g      = toGPU(Mls);
+        priFull_g  = toGPU(Pri_FullWireSize);
+        secFull_g  = toGPU(Sec_FullWireSize);
+        wp_scalar  = toScalar(int32(Winding_Pattern));
+    
+        % Element-wise compute for each candidate
+        [TLp_g, TLs_g] = arrayfun(@computeTL_one,...
+            shape_g, np_g, ns_g, priW_g, priH_g, secW_g, secH_g, ...
+            tcore_g, mlp_g, mls_g, priFull_g, secFull_g, wp_scalar);
+    
+        TLp = toHost(TLp_g);
+        TLs = toHost(TLs_g);
+    else
+        %CPU code version
+        % Winding pattern of secondary
+        % For ER, only allow center leg winding
+        isEE = (XcoreCoreShapeIndex == 1);
+        isER = (XcoreCoreShapeIndex == 2);
+        isU = (XcoreCoreShapeIndex == 3);
+        isUR = (XcoreCoreShapeIndex == 4);
+        switch Winding_Pattern
+            case 1 %center leg
+                % Secondary turns per layer
+                Sec_PerLayer = floor(Ns./Mls);
+                % Number of rows in section 1, co-center with primary
+                Ns_group1 = floor((H - 2*CoreInsulationThickness)./Sec_FullWireSize);
+                Ns_group2 = zeros(size(Ns_group1));
+                Ns_group3 = zeros(size(Ns_group1));
+                Ns_group4 = zeros(size(Ns_group1));
+                % Supposed secondary winding number if wind as mentioned above
+                SupposeNs = Ns_group1.*Mls;
+                %% Total length of windings
+    
+                % Computes indexes where cores are EE center leg
+                TLp(isEE) = Np(isEE).*2.*(PriW(isEE) + PriH(isEE) + 4*CoreInsulationThickness(isEE) + 2.* ...
+                    Mlp(isEE).*Pri_FullWireSize(isEE));
+                TLs(isEE)= Ns(isEE).*2.*(PriW(isEE) + PriH(isEE) + 4*Mlp(isEE).*Pri_FullWireSize(isEE) + 8* ...
+                    CoreInsulationThickness(isEE) + 2.*Mls(isEE).*Sec_FullWireSize(isEE));
+                % Computes indexes where cores are ER center leg
+                % From here we can see that PriW is the diameter of the center
+                % leg when an R core, and the width and height when rectangular
+                % cross section are given by the PriW and PriH
+                TLp(isER) = 2.*pi.*Np(isER).*(PriW(isER)./2 + ...
+                    CoreInsulationThickness(isER) + 0.5.*Mlp(isER) ...
+                    .*Pri_FullWireSize(isER));
+                TLs(isER) = 2.*pi.*Ns(isER).*(PriW(isER)./2+ ...
+                Mlp(isER).*Pri_FullWireSize(isER) + 2*CoreInsulationThickness ...
+                (isER) + 0.5.*Mls(isER).*Sec_FullWireSize(isER));
+                % Computes indexes where cores are U
+                TLp(isU) = 2.*Np(isU).*(PriW(isU)+PriH(isU)+...
+                    4*CoreInsulationThickness(isU)+2.*Mlp(isU) ...
+                    .*Pri_FullWireSize(isU));
+                TLs(isU) = 2.*Ns(isU).*(PriW(isU)+PriH(isU)+ ...
+                    2.*Mls(isU).*Sec_FullWireSize(isU) + 4*CoreInsulationThickness ...
+                    (isU));
+                % Computes indexes where cores are UR
+                TLp(isUR) = 2.*pi.*Np(isUR).*(PriW(isUR)./2+...
+                    CoreInsulationThickness(isUR)+0.5.*Mlp(isUR) ...
+                    .*Pri_FullWireSize(isUR));
+                TLs(isUR) = 2.*pi.*Ns(isUR).*(PriW(isUR)./2+ ...
+                    CoreInsulationThickness(isUR)+0.5.*Mls(isUR) ...
+                    .*Sec_FullWireSize(isUR));
+            case 2 %double leg
+                %% Winding pattern
+                % Only consider half because symmetric
+                Sec_PerLayer = floor(Ns./2./Mls);
+                % Winding on double leg
+                Ns_group1 = zeros(size(Sec_PerLayer)); % does not wind on center leg
+                Ns_group2 = floor((W - 3*CoreInsulationThickness - Mlp.* ...
+                Pri_FullWireSize)./Sec_FullWireSize);
+                Ns_group3 = floor((H - 2*CoreInsulationThickness - 2*Mls.* ...
+                    Sec_FullWireSize)./Sec_FullWireSize);
+                Ns_group4 = Ns_group2;
+                SupposeNs = Ns_group1.*Mls + Ns_group2.*Mls + Ns_group3.*...
+                Mls + Ns_group4.*Mls;
+                %% Total length of windings
+    
+                % Computes indexes where cores are EE double leg
+                TLp(isEE) = Np(isEE).*2.*(PriW(isEE) + PriH(isEE) + ...
+                    4*CoreInsulationThickness(isEE) + 2.* ...
+                    Mlp(isEE).*Pri_FullWireSize(isEE));
+                TLs(isEE)= Ns(isEE).*2.*(SecW(isEE) + SecH(isEE) + ...
+                    4*CoreInsulationThickness(isEE) + 2.*Mls(isEE) ...
+                    .*Sec_FullWireSize(isEE));
+                % Computes indexes where cores are ER double leg
+                TLp(isER) = 2.*pi.*Np(isER).*(PriW(isER)./2 + ...
+                    CoreInsulationThickness(isER) + 0.5.*Mlp(isER) ...
+                    .*Pri_FullWireSize(isER));
+                TLs(isER) = 2.*pi.*Ns(isER).*(sqrt(2).*PriW(isER)./2+ ...
+                    CoreInsulationThickness(isER)+0.5.*Mls(isER) ...
+                    .*Sec_FullWireSize(isER));
+                % U and UR don't have center or double leg winding options, so
+                % they are both computed the same.
+                % Computes indexes where cores are U
+                TLp(isU) = 2.*Np(isU).*(PriW(isU)+PriH(isU)+...
+                    4*CoreInsulationThickness(isU)+2.*Mlp(isU) ...
+                    .*Pri_FullWireSize(isU));
+                TLs(isU) = 2.*Ns(isU).*(PriW(isU)+PriH(isU)+ ...
+                    2.*Mls(isU).*Sec_FullWireSize(isU) + 4*CoreInsulationThickness ...
+                    (isU));
+                % Computes indexes where cores are UR
+                TLp(isUR) = 2.*pi.*Np(isUR).*(PriW(isUR)./2+...
+                    CoreInsulationThickness(isUR)+0.5.*Mlp(isUR) ...
+                    .*Pri_FullWireSize(isUR));
+                TLs(isUR) = 2.*pi.*Ns(isUR).*(PriW(isUR)./2+ ...
+                    CoreInsulationThickness(isUR)+0.5.*Mls(isUR) ...
+                    .*Sec_FullWireSize(isUR));
+            otherwise
+                warning('Wrong winding pattern');
+        end
+    end
+
+
+
     % Calculate leakage inductance (not verified or used in this code)
     Lg = u0.*(W - Mls.*Sec_FullWireSize - Mlp.*Pri_FullWireSize).*SecH./H;
         %in Henry
@@ -574,116 +606,285 @@ else
     
     % Calculate Copper Loss
     %--------------------------------------------------------
-    PriKlayer = sqrt(pi.*Pri_Nstrands).*ds./2./(Pri_WireSize);
-    Pri_xp = ds./2./skindepth.*sqrt(pi.*PriKlayer);
-    SecKlayer = sqrt(pi.*Sec_Nstrands).*ds./2./(Sec_WireSize);
-    Sec_xp = ds./2./skindepth.*sqrt(pi.*SecKlayer);
-    Pri_Rdc = rou.*TLp./(pi.*Pri_WireSize.^2./4);
-    Sec_Rdc = rou.*TLs./(pi.*Sec_WireSize.^2./4);
-    Pri_Fr = Pri_xp.*((sinh(2.*Pri_xp) + sin(2.*Pri_xp))./(cosh(2.*Pri_xp) - cos(2.* ...
-        Pri_xp)) + 2.*(Mlp.^2.*Pri_Nstrands - 1)./3.*(sinh(Pri_xp) - sin(Pri_xp))./( ...
-        cosh(Pri_xp) + cos(Pri_xp)));
-    Pri_Rac = Pri_Rdc.*Pri_Fr;
-    Sec_Fr = Sec_xp.*((sinh(2.*Sec_xp) + sin(2.*Sec_xp))./(cosh(2.*Sec_xp) - cos(2.* ...
-        Sec_xp)) + 2.*(Mls.^2.*Sec_Nstrands - 1)./3.*(sinh(Sec_xp) - sin(Sec_xp))./( ...
-        cosh(Sec_xp) + cos(Sec_xp)));
-    Sec_Rac = Sec_Rdc.*Sec_Fr;
-    Pcopper = (Iprms.^2.*Pri_Rac + Isrms.^2.*Sec_Rac);
+
+    if useGPU
+        % Move inputs to GPU
+        TLp_g     = toGPU(TLp);
+        TLs_g     = toGPU(TLs);
+        PriDia_g  = toGPU(Pri_WireSize);
+        SecDia_g  = toGPU(Sec_WireSize);
+        PriN_g    = toGPU(Pri_Nstrands);
+        SecN_g    = toGPU(Sec_Nstrands);
+        dsPri_g   = toGPU(Pri_ds);   % effective strand dia (pri)
+        dsSec_g   = toGPU(Sec_ds);   % effective strand dia (sec)
+        skind_g   = toGPU(skindepth);
+        Mlp_g     = toGPU(Mlp);
+        Mls_g     = toGPU(Mls);
+        rou_s     = toScalar(rou);   % scalar, stays on host
+    
+        % --- Vectorized GPU computation of Dowell AC resistance ---
+        Rdc_p_g = rou_s .* TLp_g ./ (pi .* (PriDia_g.^2) ./ 4);
+        Rdc_s_g = rou_s .* TLs_g ./ (pi .* (SecDia_g.^2) ./ 4);
+    
+        % Primary
+        Kp_g = sqrt(pi .* PriN_g) .* dsPri_g ./ (2 .* PriDia_g);
+        xp_g = dsPri_g ./ (2 .* skind_g) .* sqrt(pi .* Kp_g);
+    
+        % Secondary
+        Ks_g = sqrt(pi .* SecN_g) .* dsSec_g ./ (2 .* SecDia_g);
+        xs_g = dsSec_g ./ (2 .* skind_g) .* sqrt(pi .* Ks_g);
+    
+        % Factors
+        Fr_p_g = xp_g .* ((sinh(2 .* xp_g) + sin(2 .* xp_g)) ./ (cosh(2 .* xp_g) - cos(2 .* xp_g)) ...
+                 + 2 .* ((Mlp_g.^2 .* PriN_g - 1) ./ 3) .* ((sinh(xp_g) - sin(xp_g)) ./ (cosh(xp_g) + cos(xp_g))));
+        Fr_s_g = xs_g .* ((sinh(2 .* xs_g) + sin(2 .* xs_g)) ./ (cosh(2 .* xs_g) - cos(2 .* xs_g)) ...
+                 + 2 .* ((Mls_g.^2 .* SecN_g - 1) ./ 3) .* ((sinh(xs_g) - sin(xs_g)) ./ (cosh(xs_g) + cos(xs_g))));
+    
+        Pri_Rac = gather(Rdc_p_g .* Fr_p_g);
+        Sec_Rac = gather(Rdc_s_g .* Fr_s_g);
+    
+        % Copper loss
+        Pcopper = (Iprms.^2 .* Pri_Rac + Isrms.^2 .* Sec_Rac);
+    else
+        PriKlayer = sqrt(pi.*Pri_Nstrands).*Pri_ds./2./(Pri_WireSize);
+        Pri_xp = Pri_ds./2./skindepth.*sqrt(pi.*PriKlayer);
+    
+        SecKlayer = sqrt(pi.*Sec_Nstrands).*Sec_ds./2./(Sec_WireSize);
+        Sec_xp = Sec_ds./2./skindepth.*sqrt(pi.*SecKlayer);
+    
+        Pri_Rdc = rou.*TLp./(pi.*Pri_WireSize.^2./4);
+        Sec_Rdc = rou.*TLs./(pi.*Sec_WireSize.^2./4);
+        Pri_Fr = Pri_xp.*((sinh(2.*Pri_xp) + sin(2.*Pri_xp))./(cosh(2.*Pri_xp) - cos(2.* ...
+            Pri_xp)) + 2.*(Mlp.^2.*Pri_Nstrands - 1)./3.*(sinh(Pri_xp) - sin(Pri_xp))./( ...
+            cosh(Pri_xp) + cos(Pri_xp)));
+        Pri_Rac = Pri_Rdc.*Pri_Fr;
+        Sec_Fr = Sec_xp.*((sinh(2.*Sec_xp) + sin(2.*Sec_xp))./(cosh(2.*Sec_xp) - cos(2.* ...
+            Sec_xp)) + 2.*(Mls.^2.*Sec_Nstrands - 1)./3.*(sinh(Sec_xp) - sin(Sec_xp))./( ...
+            cosh(Sec_xp) + cos(Sec_xp)));
+        Sec_Rac = Sec_Rdc.*Sec_Fr;
+        Pcopper = (Iprms.^2.*Pri_Rac + Isrms.^2.*Sec_Rac);
+    end
 
     % Calculate temperature rise
     %----------------------------------------------------------------
     Rth = 16.31.*1e-3.*(Ac.*Wa).^(-0.405);
-    
-    
+    Tafterloss = Rth.*(Pcopper + Pcore) + 25;
+
     %Rth = 16.31.*((Ac*1e4).*(Wa*1e4)).^(-0.405);
     %(GPT says this is a unit mismatch and to replace with above,
     % since 16.31 is in cm, might be unit mismatch)
 
-    Tafterloss = Rth.*(Pcopper + Pcore) + 25;
-
     % Calculate the weight
     %----------------------------------------------------------------
-    WeightPri_copper = pi.*Pri_WireSize.^2./4.*TLp.* CopperDensity;
-    WeightPri_Insu = pi.*(Pri_FullWireSize.^2 - Pri_WireSize.^2)./4.*TLp.* ...
-        WireInsulationDensity;
-    WeightSec_copper = pi.*Sec_WireSize.^2./4.*TLs.*CopperDensity;
-    WeightSec_Insu = pi.*(Sec_FullWireSize.^2 - Sec_WireSize.^2)./4.*TLs.* ...
-        WireInsulationDensity;
-    WeightCore_Insu =(2.*H.*(PriW + 2*PriH) + 4.*W.*(PriW + 2*PriH) + H.*(2*PriW + ...
-        2*PriH)).*CoreInsulationThickness.*CoreInsulationDensity;
 
-    % Recalculate XcoreCoreShapeIndex == 2, ER cores
-    SelecIndex = find(XcoreCoreShapeIndex == 2);
-    WeightCore_Insu(SelecIndex) = (sqrt(2)*pi*H(SelecIndex).*PriW(SelecIndex) + ...
-        sqrt(2)*pi*2*W(SelecIndex).*PriW(SelecIndex) + H(SelecIndex)*pi.*PriW( ...
-            SelecIndex)).*CoreInsulationThickness(SelecIndex).*CoreInsulationDensity;
+    if useGPU
+        shape_g   = toGPU(int32(XcoreCoreShapeIndex));
+        H_g       = toGPU(H);
+        W_g       = toGPU(W);
+        priW_g    = toGPU(PriW);
+        priH_g    = toGPU(PriH);
+        tcore_g   = toGPU(CoreInsulationThickness);
+        dens_g    = toGPU(CoreInsulationDensity);
+    
+        WeightCore_Insu = toHost(arrayfun(@coreInsu_one, ...
+            shape_g, H_g, W_g, priW_g, priH_g, tcore_g, dens_g));
+    else
+        %CPU code version
+        % Need to calculate WeightCore_Insu independently for each geometry
+        % Preallocate
+        WeightCore_Insu = zeros(size(Np));
+        % EE: approximate insulating film area that wraps inner window walls
+        WeightCore_Insu(isEE) = ( ...
+            2.*H(isEE).*(PriW(isEE) + 2*PriH(isEE)) + ...   % vertical walls
+            4.*W(isEE).*(PriW(isEE) + 2*PriH(isEE)) + ...   % horizontal walls
+            H(isEE).*(2*PriW(isEE) + 2*PriH(isEE)) ...      % end caps / cheeks
+            ).*CoreInsulationThickness(isEE).*CoreInsulationDensity;
+    
+        % ER: circular/rounded window (use circumference terms)
+        WeightCore_Insu(isER) = ( ...
+            sqrt(2)*pi.*H(isER).*PriW(isER) + ...           % vertical wrap
+            sqrt(2)*pi.*2.*W(isER).*PriW(isER) + ...        % horizontal wrap
+            H(isER).*pi.*PriW(isER) ...                     % cheeks
+            ).*CoreInsulationThickness(isER).*CoreInsulationDensity;
+    
+        % U: rectangular, one side open; drop one horizontal wrap term
+        WeightCore_Insu(isU) = ( ...
+            2.*H(isU).*(PriW(isU) + 2*PriH(isU)) + ...
+            2.*W(isU).*(PriW(isU) + 2*PriH(isU)) + ...
+            H(isU).*(2*PriW(isU) + 2*PriH(isU)) ...
+            ).*CoreInsulationThickness(isU).*CoreInsulationDensity;
+    
+        % UR: rounded U (use circular terms horizontally, rectangular vertically)
+        WeightCore_Insu(isUR) = ( ...
+            2.*H(isUR).*(PriW(isUR) + 2*PriH(isUR)) + ...
+            pi.*W(isUR).*PriW(isUR) + ...                   % rounded horizontal
+            H(isUR).*pi.*PriW(isUR) ...
+            ).*CoreInsulationThickness(isUR).*CoreInsulationDensity;
+    end
+   
+    % Wire weights
+    WeightPri_copper = (pi.*Pri_WireSize.^2./4).*TLp.* CopperDensity;
+    WeightPri_Insu = (pi.*(Pri_FullWireSize.^2 - Pri_WireSize.^2)./4).*TLp.*WireInsulationDensity;
+    WeightSec_copper = (pi.*Sec_WireSize.^2./4).*TLs.*CopperDensity;
+    WeightSec_Insu = (pi.*(Sec_FullWireSize.^2 - Sec_WireSize.^2)./4).*TLs.*WireInsulationDensity;
+
+    % Compute total weight
     TotalWeight = Wcore + WeightPri_copper + WeightSec_copper + WeightPri_Insu + ...
         WeightSec_Insu + WeightCore_Insu;
 
     % Filter good designs
     %---------------------------------------------------------------
+    
+    % Filter by B
     B_index = find(Bm < BSAT*BSAT_discount);
+
+    % Filter by Temperature
     P_loss_index = find(Pcopper + Pcore <= Ploss_est);
     Tafterloss_index = find(Tafterloss <= Tmax);
     Tmin_index = find(Tafterloss >= Tmin);
+
+    % Filter by weight
     TotalWeight_index = find(TotalWeight < MaxWeight);
 
+    % Filter by packing factor
     OverallPackingmin_index = find(OverallPacking >= minpackingfactor);
     OverallPackingmax_index = find(OverallPacking <= maxpackingfactor);
 
-    Mlp_index = find(Mlp.*Pri_FullWireSize <=W - 3*CoreInsulationThickness);
-    Pri_PerLayer_index = find(Pri_PerLayer.*Pri_FullWireSize < H - 2* ...
-        CoreInsulationThickness);
-
-    % make sure pri and sec has enough insulation in between
     switch Winding_Pattern
-        case 1 %center leg
-            Mls_index = find(Mls.*Sec_FullWireSize + Mlp.*Pri_FullWireSize ...
-                <=W - 3*CoreInsulationThickness);
-        case 2 % double leg, Ns2 or Ns4 together with primary fits in the window 
-            % width, Ns3 and primary also fits in the window width
-            Mls_index = intersect(find(Ns_group2.*Sec_FullWireSize + Mlp.* ...
-                Pri_FullWireSize <= W - 3*CoreInsulationThickness),...
-                find(Ns_group3.*Sec_FullWireSize + Mlp.*Pri_FullWireSize ...
-                <=W - 3*CoreInsulationThickness));
+        case 1 % center leg
+            Ns_group1 = floor((H - 2*CoreInsulationThickness)./Sec_FullWireSize);
+            Ns_group2 = zeros(size(Ns_group1));
+            Ns_group3 = zeros(size(Ns_group1));
+            Ns_group4 = zeros(size(Ns_group1));
+            SupposeNs = Ns_group1.*Mls;
+        case 2 % double leg
+            Ns_group1 = zeros(size(Sec_PerLayer));
+            Ns_group2 = floor((W - 3*CoreInsulationThickness - Mlp.*Pri_FullWireSize)./Sec_FullWireSize);
+            Ns_group3 = floor((H - 2*CoreInsulationThickness - 2*Mls.*Sec_FullWireSize)./Sec_FullWireSize);
+            Ns_group4 = Ns_group2;
+            SupposeNs = Ns_group1.*Mls + Ns_group2.*Mls + Ns_group3.*Mls + Ns_group4.*Mls;
         otherwise
-            disp('Winding pattern does not meet Mls requirement');
+            error('Unsupported winding pattern');
     end
 
+    if useGPU
+        shape_g  = toGPU(int32(XcoreCoreShapeIndex));
+        wp_s     = toScalar(int32(Winding_Pattern));
+    
+        PriPer_g = toGPU(Pri_PerLayer);
+        PriFull_g= toGPU(Pri_FullWireSize);
+        SecPer_g = toGPU(Sec_PerLayer);
+        SecFull_g= toGPU(Sec_FullWireSize);
+        Mlp_g    = toGPU(Mlp);
+        Mls_g    = toGPU(Mls);
+    
+        Ns1_g    = toGPU(Ns_group1);
+        Ns2_g    = toGPU(Ns_group2);
+        Ns3_g    = toGPU(Ns_group3);
+        Ns4_g    = toGPU(Ns_group4);
+        H_g      = toGPU(H);
+        W_g      = toGPU(W);
+        Tcore_g  = toGPU(CoreInsulationThickness);
+    
+        SupposeNs_g= toGPU(SupposeNs);
+        Ns_g      = toGPU(Ns);
+    
+        ok_g = arrayfun(@windowOk_one, shape_g, wp_s, ...
+            PriPer_g, PriFull_g, SecPer_g, SecFull_g, ...
+            Mlp_g, Mls_g, Ns1_g, Ns2_g, Ns3_g, Ns4_g, ...
+            H_g, W_g, Tcore_g, SupposeNs_g, Ns_g);
+    
+        WindowFit_index = find(toHost(ok_g));
 
-    % Secondary winding index
-    Ns_group1_index = find(Ns_group1 >= 0);
-    Ns_group2_index = find(Ns_group2 >= 0);
-    Ns_group3_index = find(Ns_group3 >= 0);
-    Ns_group4_index = find(Ns_group4 >= 0);
-    SupposeNs_index = find(SupposeNs >= Ns);
+    else
+        %CPU code version
+        % Geometry masks
+        is_EE_or_ER_core = (XcoreCoreShapeIndex==1) | (XcoreCoreShapeIndex==2);
+        is_U_or_UR_core  = (XcoreCoreShapeIndex==3) | (XcoreCoreShapeIndex==4);
+        
+        % Winding pattern masks
+        is_center_leg_pattern = (Winding_Pattern==1);
+        is_double_leg_pattern = (Winding_Pattern==2);
+        
+        % Final pass/fail vector for this group of constraints
+        meetsWindowFitConstraints = false(size(Np));
+        
+        % ===== EE/ER cores: center-leg pattern =====
+        if is_center_leg_pattern
+            % Height constraints (primary and secondary) and width constraint (both)
+            EEER_center_pri_height_ok = is_EE_or_ER_core & ...
+                (Pri_PerLayer.*Pri_FullWireSize <= H - 2.*CoreInsulationThickness);
+        
+            EEER_center_sec_height_ok = is_EE_or_ER_core & ...
+                (Sec_PerLayer.*Sec_FullWireSize <= H - 2.*CoreInsulationThickness);
+        
+            EEER_center_width_ok = is_EE_or_ER_core & ...
+                (Mlp.*Pri_FullWireSize + Mls.*Sec_FullWireSize <= W - 3.*CoreInsulationThickness);
+        
+            meetsWindowFitConstraints = meetsWindowFitConstraints | ...
+                (EEER_center_pri_height_ok & EEER_center_sec_height_ok & EEER_center_width_ok);
+        end
+        
+        % ===== EE/ER cores: double-leg pattern =====
+        if is_double_leg_pattern
+            EEER_double_pri_height_ok = is_EE_or_ER_core & ...
+                (Pri_PerLayer.*Pri_FullWireSize <= H - 2.*CoreInsulationThickness);
+        
+            % Per table: (Ns3 + 2*Mls)*SecFullWireSize <= H - 2*TcoreInsu
+            EEER_double_sec_height_ok = is_EE_or_ER_core & ...
+                ((Ns_group3 + 2.*Mls).*Sec_FullWireSize <= H - 2.*CoreInsulationThickness);
+        
+            % Per table (width): Mlp*PriFullWireSize + Ns2*SecFullWireSize <= W - 3*TcoreInsu
+            EEER_double_width_ok = is_EE_or_ER_core & ...
+                (Mlp.*Pri_FullWireSize + Ns_group2.*Sec_FullWireSize <= W - 3.*CoreInsulationThickness);
+        
+            meetsWindowFitConstraints = meetsWindowFitConstraints | ...
+                (EEER_double_pri_height_ok & EEER_double_sec_height_ok & EEER_double_width_ok);
+        end
+        
+        % ===== U/UR cores (table gives one set; apply for either selected pattern) =====
+        % Height: Pri_perlayer*PriFull + Ns1*SecFull <= H - 3*TcoreInsu
+        UUR_height_ok = is_U_or_UR_core & ...
+            (Pri_PerLayer.*Pri_FullWireSize + Ns_group1.*Sec_FullWireSize <= H - 3.*CoreInsulationThickness);
+        
+        % Width #1: Mlp*PriFull + Ns2*SecFull <= W - 3*TcoreInsu
+        UUR_width1_ok = is_U_or_UR_core & ...
+            (Mlp.*Pri_FullWireSize + Ns_group2.*Sec_FullWireSize <= W - 3.*CoreInsulationThickness);
+        
+        % Width #2: Mls*SecFull + Ns2*SecFull <= W - 2*TcoreInsu
+        UUR_width2_ok = is_U_or_UR_core & ...
+            (Mls.*Sec_FullWireSize + Ns_group2.*Sec_FullWireSize <= W - 2.*CoreInsulationThickness);
+        
+        meetsWindowFitConstraints = meetsWindowFitConstraints | ...
+            (UUR_height_ok & UUR_width1_ok & UUR_width2_ok);
+        
+        % Also require that the chosen layer/row plan can realize Ns overall
+        hasEnoughSecondaryPositions = (SupposeNs >= Ns);
+        meetsWindowFitConstraints = meetsWindowFitConstraints & hasEnoughSecondaryPositions;
+        
+        % Export indices used downstream
+        WindowFit_index = find(meetsWindowFitConstraints);
+    end
 
+    % If no successful indexes, use step for every line here to see where
+    % 0x1 array shows up, and thats the bottlenecking factor.
     Index_Meet_All = intersect(B_index,P_loss_index);
     Index_Meet_All = intersect(Index_Meet_All,Tafterloss_index);
     Index_Meet_All = intersect(Index_Meet_All,Tmin_index);
     Index_Meet_All = intersect(Index_Meet_All,TotalWeight_index);
     Index_Meet_All = intersect(Index_Meet_All,OverallPackingmin_index);
     Index_Meet_All = intersect(Index_Meet_All,OverallPackingmax_index);
-    Index_Meet_All = intersect(Index_Meet_All,Mlp_index);
-    Index_Meet_All = intersect(Index_Meet_All,Pri_PerLayer_index);
-    Index_Meet_All = intersect(Index_Meet_All,Mls_index);
-    Index_Meet_All = intersect(Index_Meet_All,Ns_group1_index);
-    Index_Meet_All = intersect(Index_Meet_All,Ns_group2_index);
-    Index_Meet_All = intersect(Index_Meet_All,Ns_group3_index);
-    Index_Meet_All = intersect(Index_Meet_All,Ns_group4_index);
-    Index_Meet_All = intersect(Index_Meet_All,SupposeNs_index);
+    Index_Meet_All = intersect(Index_Meet_All, WindowFit_index);
 
     % Sort by total weight and keep only the lightest one
-    %
     [~,SortIndex] = sort(TotalWeight(Index_Meet_All));
 
     if(length(SortIndex) >= 1)
         TotalWeightSortIndex = Index_Meet_All(SortIndex(1:1));
 
-        V_core   = (Wcore)/CoreDensity;
         V_cu     = ((WeightPri_copper+WeightSec_copper))/CopperDensity;
         V_insu   = ((WeightCore_Insu+WeightPri_Insu+WeightSec_Insu))/CoreInsulationDensity;
-        Volume_m3 = V_core + V_cu + V_insu;
+        Volume_m3 = Vcore + V_cu + V_insu;
 
         Design(:, 1)  = Po(TotalWeightSortIndex);
         Design(:, 2)  = Vppeak(TotalWeightSortIndex);
@@ -703,10 +904,10 @@ else
         Design(:,16)  = Pri_FullWireSize(TotalWeightSortIndex);
         Design(:,17)  = Sec_WireSize(TotalWeightSortIndex);
         Design(:,18)  = Sec_FullWireSize(TotalWeightSortIndex);
-                Design(:,19) = Ippeak(TotalWeightSortIndex) ./ ...
-                       (pi * Pri_Nstrands(TotalWeightSortIndex) .* ds(TotalWeightSortIndex).^2 / 4);
+        Design(:,19) = Ippeak(TotalWeightSortIndex) ./ ...
+                       (pi * Pri_Nstrands(TotalWeightSortIndex) .* Pri_ds(TotalWeightSortIndex).^2 / 4);
         Design(:,20) = Ispeak(TotalWeightSortIndex) ./ ...
-                       (pi * Sec_Nstrands(TotalWeightSortIndex) .* ds(TotalWeightSortIndex).^2 / 4);
+                       (pi * Sec_Nstrands(TotalWeightSortIndex) .* Sec_ds(TotalWeightSortIndex).^2 / 4);
         Design(:,21) = Pri_Nstrands(TotalWeightSortIndex);
         Design(:,22) = Sec_Nstrands(TotalWeightSortIndex);
         Design(:,23) = Pri_PerLayer(TotalWeightSortIndex);
@@ -737,4 +938,83 @@ else
         disp('Requirements not met. Filtered indexes == 0');
     end
 end
+end
+
+
+
+% ---------- local GPU kernel for TLp/TLs ----------
+function [tLp,tLs] = computeTL_one(shape,np,ns,priW,priH,secW,secH,tcore,mlp,mls,priFull,secFull,wp)
+% shape: 1=EE, 2=ER, 3=U, 4=UR; wp: 1=center-leg, 2=double-leg
+
+    if wp==1
+        % Center-leg
+        if shape==1  % EE
+            tLp = np*2*(priW+priH+4*tcore+2*mlp*priFull);
+            tLs = ns*2*(priW+priH+4*mlp*priFull+8*tcore+2*mls*secFull);
+        elseif shape==2 % ER
+            tLp = 2*pi*np*(priW/2 + tcore + 0.5*mlp*priFull);
+            tLs = 2*pi*ns*(priW/2 + mlp*priFull + 2*tcore + 0.5*mls*secFull);
+        elseif shape==3 % U
+            % matches your U-center formulas
+            tLp = 2*np*(priW+priH+4*tcore+2*mlp*priFull);
+            tLs = 2*ns*(priW+priH+2*mls*secFull+4*tcore);
+        else           % UR
+            tLp = 2*pi*np*(priW/2 + tcore + 0.5*mlp*priFull);
+            tLs = 2*pi*ns*(priW/2 + tcore + 0.5*mls*secFull);
+        end
+    else
+        % Double-leg
+        if shape==1  % EE
+            tLp = np*2*(priW+priH+4*tcore+2*mlp*priFull);
+            tLs = ns*2*(secW+secH+4*tcore+2*mls*secFull);
+        elseif shape==2 % ER
+            tLp = 2*pi*np*(priW/2 + tcore + 0.5*mlp*priFull);
+            tLs = 2*pi*ns*(sqrt(2)*priW/2 + tcore + 0.5*mls*secFull);
+        elseif shape==3 % U
+            tLp = 2*np*(priW+priH+4*tcore+2*mlp*priFull);
+            tLs = 2*ns*(priW+priH+4*tcore+2*mls*secFull);
+        else           % UR
+            tLp = 2*pi*np*(priW/2 + tcore + 0.5*mlp*priFull);
+            tLs = 2*pi*ns*(priW/2 + tcore + 0.5*mls*secFull);
+        end
+    end
+end
+
+% ---------- local GPU kernel for WeightCore_Insu ----------
+function w = coreInsu_one(shape,H,W,priW,priH,tcore,dens)
+    % area term depends on shape (your existing approximations)
+    if shape==1          % EE: rectangular wraps both ways + cheeks
+        area = 2*H*(priW+2*priH) + 4*W*(priW+2*priH) + H*(2*priW+2*priH);
+    elseif shape==2      % ER: rounded
+        area = sqrt(2)*pi*H*priW + sqrt(2)*pi*2*W*priW + H*pi*priW;
+    elseif shape==3      % U: one side open; drop one horizontal wrap
+        area = 2*H*(priW+2*priH) + 2*W*(priW+2*priH) + H*(2*priW+2*priH);
+    else                 % UR: rounded horizontally, rectangular vertically
+        area = 2*H*(priW+2*priH) + pi*W*priW + H*pi*priW;
+    end
+    w = area * tcore * dens;
+end
+
+% ---------- local GPU kernel for window-fit (Table B.3) ----------
+function ok = windowOk_one(shape,wp, PriPer, PriFull, SecPer, SecFull, ...
+                           Mlp, Mls, Ns1, Ns2, Ns3, Ns4, H, W, Tcore, SupposeNs, Ns)
+    if shape==1 || shape==2
+        if wp==1
+            okHpri = (PriPer*PriFull <= H - 2*Tcore);
+            okHsec = (SecPer*SecFull <= H - 2*Tcore);
+            okW    = (Mlp*PriFull + Mls*SecFull <= W - 3*Tcore);
+            ok = okHpri && okHsec && okW;
+        else
+            okHpri = (PriPer*PriFull <= H - 2*Tcore);
+            okHsec = ((Ns3 + 2*Mls)*SecFull <= H - 2*Tcore);
+            okW    = (Mlp*PriFull + Ns2*SecFull <= W - 3*Tcore);
+            ok = okHpri && okHsec && okW;
+        end
+    else
+        okH  = (PriPer*PriFull + Ns1*SecFull <= H - 3*Tcore);
+        okW1 = (Mlp*PriFull + Ns2*SecFull   <= W - 3*Tcore);
+        okW2 = (Mls*SecFull + Ns2*SecFull   <= W - 2*Tcore);
+        ok = okH && okW1 && okW2;
+    end
+    ok = ok && (SupposeNs >= Ns);
 end
