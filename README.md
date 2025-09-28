@@ -22,3 +22,6 @@ Recent changes:
 - U and UR core implementations for the winding pattern and insulation were included, since they weren't before.
 - Made it more efficient by allowing GPU computation on some of the most computation-intensive array functions, which were tested with the code profiler toolbox
 - Multiple core densities can be used in candidate design sweep
+
+RTC Script:
+- Currently am fixing up the RTC script so that the excel writing and global variables are removed from the parfor loop, so the RTC script largely matches the inverter transformer one. I already made the Design(1 to 33).data into Design( : , 1 to 32), erased global variables, erased some of the excel writing and runNumber stuff, and need to match the two scripts now one to one with the loop parts. I also made the driver script have a parfor loop to match the other one.
