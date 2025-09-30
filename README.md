@@ -24,6 +24,8 @@ This is a script modified from the 2020 thesis by Yiou He: "Towards High Voltage
 -  Need to replace core insulation thickness with a new value, need to take into account the epoxy between wires in each layer and between layers, need to include secondary layer stress and interlayer tape, need to filter designs by their volts-per-layer.
 - I need to edit the inductor script to solve some of the same issues I solved in the transformer one, i.e. maybe adding a GPU option and solid core vs. litz wire option
 
+- AC Dowell resistance is too high for primary (and also likely secondary) and cancelling all candidate designs. I need to recheck the GPU and CPU code sections to make sure they match with the definition of AC Dowell resistance, numstrands, etc.
+
 ## Recent changes:
 - Added GPU computing options for this transformer script, but the old CPU options also work
 - Allowed internal automatic computing for whether litz wire or solid magnet wire is better, and chooses corresponding results for the optimal choice
