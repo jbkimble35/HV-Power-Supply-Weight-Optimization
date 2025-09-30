@@ -2,12 +2,12 @@
 *This repository includes code and Altium files created by Yiou He and Suzanne O'Meara as part of their thesis work at MIT under the supervision of Professor David Perrault. Their work's original files, architecture, procedures, and data are the foundation to the current implementation. To the best of my ability in transcribing the code from PDFs, the unedited code and original Altium files are included in the OriginalWork directory.*
 
 ## Details on the specific procedures of each of the scripts is given in the theses available below:
-- [On the Use of Switched-Capacitor Multi-Level Inverters for Electro-Aerodynamic Thrust Applications - Suzanne O'Meara & David Perrault](https://dspace.mit.edu/handle/1721.1/130195)
-- [Towards Lightweight High-Voltage Power Conversion - Yiou He & David Perrault](https://dspace.mit.edu/handle/1721.1/128589
+- [On the Use of Switched-Capacitor Multi-Level Inverters for Electro-Aerodynamic Thrust Applications - Suzanne O'Meara](https://dspace.mit.edu/handle/1721.1/130195)
+- [Towards Lightweight High-Voltage Power Conversion - Yiou He](https://dspace.mit.edu/handle/1721.1/128589
 )
 
 # HV Power Supply Weight Optimization
-This is a script modified from the 2020 thesis by Yiou He: "Towards High Voltage Power Conversion", that has been modified for readability and easier data importing, as well as taking into account Volume, fixing some issues with winding patterns and consistency across driver scripts, etc. The content was parsed with OCR from the original thesis PDF and then manually checked to remove errors. Comments were added to explain functions of much of the code for my own understanding.
+This is a script modified from the 2020 thesis by Yiou He: "Towards High Voltage Power Conversion", that has been modified for expansion of datasets from the thesis info, as well as taking into account volume, fixing some issues with winding patterns and consistency across driver scripts, etc. The content was parsed with OCR from the original thesis PDF and then manually checked to remove errors. Comments were added to explain functions of much of the code for my own understanding.
 
 ## Current issues I have identified: (delete as needed)
 -  Make the RTC script match the inductor and transformer design script so that every iteration of the loop writes to a row of the final design instead of to a global variable.
