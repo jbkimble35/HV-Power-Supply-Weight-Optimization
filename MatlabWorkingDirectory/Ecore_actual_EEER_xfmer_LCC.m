@@ -1,27 +1,41 @@
 function y = Ecore_actual_EEER_xfmer_LCC(raw,raw1,raw2,raw3,raw4,raw5,raw6, ...
     Vppeak_range, Vspeak_range, Po_range, fs_range, Vinsulation_max_range, Winding_Pattern)
 
-%% Tunable Parameters
+% Tunable Parameters
+%% -------------------------------------------------------------------------------------
 
 % The inductor is much lower voltage since it's on the primary side, so it
 % doesn't need some of these insulation parameters.
+
+% Insulation
+%-------------------------------------------
 
 % Potting spec.s
 UsePotting      = true;
 Potting_DS      = 20e6;      % V/m
 CoronaMargin    = 2.0;       % Breakdown voltage safety factor
+
 % Enamel/Insulation one-sided thickness
 t_turn_p = 40e-6; %m 
 t_turn_s = 60e-6; %m
+
 % Interlayer tape (e.g., Kapton)
 Tape_Interlayer_Thickness = 50e-6;    % m, per ply
 Tape_Interlayer_DS        = 200e6;    % V/m, (≈200 kV/mm for Kapton)
 Tape_Interlayer_Wraps     = 2;
-% This is the thickness of epoxy between layers
+
+% Thickness of epoxy between layers
 Interlayer_Epoxy_Thickness = 0;       % m
+
 % GPU computing options
+%-------------------------------------------
+
 useGPU = true;
 useSingleOnGPU = false;
+
+% Transformer parameters
+%-------------------------------------------
+
 % Minimum transformer efficiency
 etaXfmer = 0.85;
 % Max operating temp in Celsius
@@ -65,7 +79,8 @@ LitzFactor = 0.8;
 % For solid core:
 SolidGate = 1.5; % factor of skindepth threshold to go from solid to litz
 
-%% Electrical constants
+% Electrical constants
+%-------------------------------------------
 
 % density of copper (g/m^3)
 CopperDensity = 8.96e6;
@@ -78,7 +93,10 @@ u0 = 4*pi*1e-7;
 % permittivity of free space F/m
 ebs10 = 8.854*1e-12; %#ok<NASGU>
 
-%% Body of function
+
+% Body of function
+%% --------------------------------------------------------------------------------------
+
 
 if useSingleOnGPU
     toGPU    = @(x) gpuArray(single(x));
@@ -89,7 +107,7 @@ else
 end
 toHost = @(x) gather(x);
 
-% Save design results
+% Preallocate
 Design = zeros(1,44);
 
 [m1,n1] = size(raw1);
@@ -99,7 +117,6 @@ XCoreFreq = cell2mat(raw1(2:m1,3:n1));
 XCoreBfield    = cell2mat(raw2(2:m1,3:n1));
 [m1,n1] = size(raw3);
 XCorePloss   = cell2mat(raw3(2:m1,3:n1));
-
 
 [NoMat,~] = size(XCoreFreq);
 for i = 1:NoMat
@@ -187,7 +204,10 @@ for i = 1:1:NoMat
     end
 end
 
+
 %Core size
+%-------------------------------------------
+
 [m1,~] = size(raw);
 TransformerCoreIndex = cell2mat(raw(2:m1,1));
 XcoreVe = cell2mat(raw(2:m1,3))/(1000^3); % in m
@@ -234,17 +254,19 @@ XcoreWindowH = cell2mat(raw(2:m1,13))/1000;
 
 ShuffleIndex = 1:1:length(TransformerCoreIndex);
 
-%% ------------------------------------------------------------------------
 % DESIGN SWEEP
+%% ------------------------------------------------------------------------
+
 CoreMatIndexSweep = find(FreqFlag);
+
+
+% N-Dimensional grid expansion, 
+% then shrinking based on some initial filters
+% -------------------------------------
 
 % Here I need to make this more efficient. Instad of making a 10
 % dimensional grid to subsequently sweep, I should use a different method
-% that is lighter on RAM. Options include:
-% - Preallocating RAM
-% - 
-
-
+% that is lighter on RAM.
 
 [Po, fs, Vppeak, Vspeak, Vinsulation_max, matno_record, ShuffleXcoreIndex, Np, Mlp, Mls] = ndgrid( ...
     Po_range, fs_range, Vppeak_range, Vspeak_range, Vinsulation_max_range, ...
@@ -264,7 +286,6 @@ Mls = reshape(Mls,[],1);
 ui = XCoreMU(matno_record);
 BSAT = XCoreBSAT(matno_record);
 ShuffleXcoreIndex = reshape(ShuffleXcoreIndex,[],1);
-
 
 % Map XcoreSize to actual size
 Ve = XcoreVe(ShuffleXcoreIndex);
@@ -316,7 +337,6 @@ if isempty(Po)
         'or loosen other ranges, or ensure units match. Try again']);
     return; %#ok<UNRCH>
 end
-
 
 
 % Select Steinmetz params near each fs and expand design rows accordingly
@@ -383,6 +403,10 @@ K1    = nonzeros(reshape(K1(UniqueRowIdcs,:)',   [],1));
 beta  = nonzeros(reshape(beta(UniqueRowIdcs,:)', [],1));
 alpha = nonzeros(reshape(alpha(UniqueRowIdcs,:)',[],1));
 
+% For the remaining indexes, compute the more detailed parameters 
+% like losses, size, subsequent weight
+% -------------------------------------
+
 if (isempty(Po))
     y = 0;
 else
@@ -391,8 +415,9 @@ else
     % meet current density limit and keep reasonable AC losses. That wire
     % size is then used to match everything else.
 
-    skindepth = 1./sqrt(pi*fs*u0/rou);
     % Electricals & losses
+    % -------------------------------------
+    skindepth = 1./sqrt(pi*fs*u0/rou);
     k  = Vspeak./Vppeak;
     Ns = round(Np.*k)+1;
     % Primary Current
@@ -404,6 +429,8 @@ else
     % Required copper area
 
     % Flux and core loss
+    % -------------------------------------
+
     lamda = Vppeak./pi./fs;
     % Equivalent load resistor
     Rload = Vspeak.*Vspeak./2./Po;
@@ -417,14 +444,22 @@ else
     Vcore = Ve;
 
     % Core weight (g)
+    % -------------------------------------
+    
     densityRow = CoreDensity(matno_record);
     assert(numel(densityRow)==numel(Vcore),'Core density mapping mismatch');
     Wcore = Vcore.*densityRow;
+    
     % Calculate Bmax (T)
+    % -------------------------------------
     Bm = lamda./(2.*Np.*Ac);
+    
     % Calculate core loss (W)
+    % -------------------------------------
     Pcore = CoreLossMultiple.*Vcore.*K1.*fs.^alpha.*Bm.^beta;
 
+    % Determine wire type, and num of strands if Litz
+    % -------------------------------------
     Areq_p=Iprms./Jwmax;                                % [m^2]
     Areq_s=Isrms./Jwmax;                                % [m^2]
     
@@ -438,6 +473,7 @@ else
     Astrand=pi.*(dstrand_litz./2).^2;                   % [m^2]
     
     % Primary
+    % ----------------
     Pri_Nstrands=ones(size(Iprms));
     Pri_Nstrands(~useSolid_p)=ceil(Areq_p(~useSolid_p)./Astrand(~useSolid_p));
     Pri_WireSize=dsolid_p;
@@ -450,6 +486,7 @@ else
     Pri_FullWireSize = Pri_WireSize + 2.*t_turn_p;
     
     % Secondary
+    % ----------------
     Sec_Nstrands=ones(size(Isrms));
     Sec_Nstrands(~useSolid_s)=ceil(Areq_s(~useSolid_s)./Astrand(~useSolid_s));
     Sec_WireSize=dsolid_s;
@@ -470,17 +507,21 @@ else
     OverallPacking = (A_pri_full.*Np + A_sec_full.*(Ns./2))./ (H.*W);
 
     % Winding structure
+    % ----------------
+    
     DS_clearance = (UsePotting).*Potting_DS+(~UsePotting).*dielectricstrength_insulation;
     CoreInsulationThickness = CoronaMargin .* Vinsulation_max ./ DS_clearance;
     Pri_PerLayer=floor(Np./Mlp);
     Sec_PerLayer=floor(Ns./Mls);
     
-    % ---- Interlayer barrier capability and radial build ----
+    % Interlayer param.s
+    % -----------------
+    
     % Effective radial build added between adjacent secondary layers (geometry)
     t_interlayer_radial = Tape_Interlayer_Wraps .* Tape_Interlayer_Thickness ...
                     + (UsePotting .* Interlayer_Epoxy_Thickness);
 
-    % Breakdown voltage capability of the barrier (tape + epoxy), derated
+    % Breakdown voltage capability of the tape + epoxy, derated
     Vbreak_interlayer = (Tape_Interlayer_Wraps .* Tape_Interlayer_Thickness .* Tape_Interlayer_DS) ...
                       + (UsePotting .* Interlayer_Epoxy_Thickness .* Potting_DS);
     Vbreak_interlayer = Vbreak_interlayer ./ CoronaMargin;
@@ -545,7 +586,7 @@ else
                     PriW(isEE) + PriH(isEE) + 4.*Mlp(isEE).*Pri_FullWireSize(isEE) + 8.*CoreInsulationThickness(isEE) ...
                     + 2.*( Mls(isEE).*Sec_FullWireSize(isEE) + max(Mls(isEE)-1,0).*t_interlayer_radial ) );
     
-                % ER center  (note the 0.5 factor path)
+                % ER center
                 TLp(isER) = 2.*pi.*Np(isER).*( ...
                     PriW(isER)./2 + CoreInsulationThickness(isER) + 0.5.*Mlp(isER).*Pri_FullWireSize(isER));
                 TLs(isER) = 2.*pi.*Ns(isER).*( ...
@@ -559,7 +600,7 @@ else
                     PriW(isU) + PriH(isU) + 4.*CoreInsulationThickness(isU) ...
                     + 2.*( Mls(isU).*Sec_FullWireSize(isU) + max(Mls(isU)-1,0).*t_interlayer_radial ) );
     
-                % UR center (0.5 factor)
+                % UR center
                 TLp(isUR) = 2.*pi.*Np(isUR).*( ...
                     PriW(isUR)./2 + CoreInsulationThickness(isUR) + 0.5.*Mlp(isUR).*Pri_FullWireSize(isUR));
                 TLs(isUR) = 2.*pi.*Ns(isUR).*( ...
@@ -570,14 +611,14 @@ else
                 % Only consider half because symmetric
                 Sec_PerLayer = floor(Ns./2./Mls);
     
-                % Secondary group counts (per your table)
+                % Secondary group counts
                 Ns_group1 = zeros(size(Sec_PerLayer));
                 Ns_group2 = floor((W - 3.*CoreInsulationThickness - Mlp.*Pri_FullWireSize)./Sec_FullWireSize);
                 Ns_group3 = floor((H - 2.*CoreInsulationThickness - 2.*Mls.*Sec_FullWireSize)./Sec_FullWireSize);
                 Ns_group4 = Ns_group2;
                 SupposeNs = Ns_group1.*Mls + Ns_group2.*Mls + Ns_group3.*Mls + Ns_group4.*Mls;
     
-                %% Total length of windings (primary unchanged)
+                %% Total length of windings
                 % EE double
                 TLp(isEE) = Np(isEE).*2.*( ...
                     PriW(isEE) + PriH(isEE) + 4.*CoreInsulationThickness(isEE) + 2.*Mlp(isEE).*Pri_FullWireSize(isEE));
@@ -585,7 +626,7 @@ else
                     SecW(isEE) + SecH(isEE) + 4.*CoreInsulationThickness(isEE) ...
                     + 2.*( Mls(isEE).*Sec_FullWireSize(isEE) + max(Mls(isEE)-1,0).*t_interlayer_radial ) );
     
-                % ER double  (0.5 factor path)
+                % ER double
                 TLp(isER) = 2.*pi.*Np(isER).*( ...
                     PriW(isER)./2 + CoreInsulationThickness(isER) + 0.5.*Mlp(isER).*Pri_FullWireSize(isER));
                 TLs(isER) = 2.*pi.*Ns(isER).*( ...
@@ -599,7 +640,7 @@ else
                     PriW(isU) + PriH(isU) + 4.*CoreInsulationThickness(isU) ...
                     + 2.*( Mls(isU).*Sec_FullWireSize(isU) + max(Mls(isU)-1,0).*t_interlayer_radial ) );
     
-                % UR double (0.5 factor)
+                % UR double
                 TLp(isUR) = 2.*pi.*Np(isUR).*( ...
                     PriW(isUR)./2 + CoreInsulationThickness(isUR) + 0.5.*Mlp(isUR).*Pri_FullWireSize(isUR));
                 TLs(isUR) = 2.*pi.*Ns(isUR).*( ...
@@ -640,7 +681,7 @@ else
         Mls_g     = toGPU(Mls);
         rou_s     = toScalar(rou);   % scalar, stays on host
     
-        % --- Vectorized GPU computation of Dowell AC resistance ---
+        % --- Dowell AC resistance ---
         Rdc_p_g = rou_s .* TLp_g ./ (pi .* (PriDia_g.^2) ./ 4);
         Rdc_s_g = rou_s .* TLs_g ./ (pi .* (SecDia_g.^2) ./ 4);
     
@@ -687,6 +728,7 @@ else
 
     % Calculate temperature rise
     %----------------------------------------------------------------
+    
     % Convert areas to cm^2 before applying the correlation
     Ac_cm2 = Ac .* 1e4;          % m^2 -> cm^2
     Wa_cm2 = Wa .* 1e4;          % m^2 -> cm^2
@@ -901,7 +943,10 @@ else
 
     % Sort by total weight and keep only the lightest one
     [~,SortIndex] = sort(TotalWeight(Index_Meet_All));
-
+    
+    % Build Results Table 
+    %% -----------------------------------------------------------------------------
+    
     if(length(SortIndex) >= 1)
         TotalWeightSortIndex = Index_Meet_All(SortIndex(1:1));
 
@@ -965,7 +1010,7 @@ end
 
 
 
-% ---------- local GPU kernel for TLp/TLs ----------
+% ---------- TLp/TLs ----------
 function [tLp,tLs] = computeTL_one(shape,np,ns,priW,priH,secW,secH,tcore,mlp,mls,priFull,secFull,tinter,wp)
 % shape: 1=EE, 2=ER, 3=U, 4=UR; wp: 1=center-leg, 2=double-leg
 % tinter: interlayer radial thickness per gap
@@ -1010,7 +1055,7 @@ function [tLp,tLs] = computeTL_one(shape,np,ns,priW,priH,secW,secH,tcore,mlp,mls
     end
 end
 
-% ---------- local GPU kernel for WeightCore_Insu ----------
+% ---------- WeightCore_Insu ----------
 function w = coreInsu_one(shape,H,W,priW,priH,tcore,dens)
     % area term depends on shape (your existing approximations)
     if shape==1          % EE: rectangular wraps both ways + cheeks
@@ -1025,7 +1070,7 @@ function w = coreInsu_one(shape,H,W,priW,priH,tcore,dens)
     w = area * tcore * dens;
 end
 
-% ---------- local GPU kernel for window-fit (Table B.3) ----------
+% ---------- window-fit ----------
 function ok = windowOk_one(shape,wp, PriPer, PriFull, SecPer, SecFull, ...
                            Mlp, Mls, Ns1, Ns2, Ns3, Ns4, H, W, Tcore, tinter,SupposeNs, Ns) %#ok<INUSD>
     if shape==1 || shape==2
