@@ -10,7 +10,7 @@ Below is the content directly from the thesis work:
 - [Towards Lightweight High-Voltage Power Conversion - Yiou He](https://dspace.mit.edu/handle/1721.1/128589
 )
 
-# HV Power Supply Weight Optimization
+# HV Power Supply Weight Optimization (MatlabWorkingDirectory)
 This is a script modified from the 2020 thesis by Yiou He: "Towards High Voltage Power Conversion", that has been modified for expansion of datasets from the thesis info, as well as taking into account volume, fixing some issues with winding patterns and consistency across driver scripts, etc. The content was parsed with OCR from the original thesis PDF and then manually checked to remove errors. Comments were added to explain functions of much of the code for my own understanding.
 
 ## Current issues I have identified: (delete as needed)
