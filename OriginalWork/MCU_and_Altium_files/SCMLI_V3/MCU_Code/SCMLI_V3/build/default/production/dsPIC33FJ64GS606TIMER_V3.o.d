@@ -1,0 +1,4 @@
+build/default/production/dsPIC33FJ64GS606TIMER_V3.o:  \
+ dsPIC33FJ64GS606TIMER_V3.c  \
+dsPIC33FJ256MC510TIMER_V3.h  \
+main_SCMLI_V3.h 

@@ -1,0 +1,3 @@
+build/default/debug/dsPIC33FJ256MC510IO_V3.o:  \
+dsPIC33FJ256MC510IO_V3.c  \
+ dsPIC33FJ256MC510IO_V3.h 

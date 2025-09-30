@@ -1,0 +1,4 @@
+build/default/debug/dsPIC33FJ256MC510UART_V3.o:  \
+ dsPIC33FJ256MC510UART_V3.c  \
+dsPIC33FJ256MC510UART_V3.h  \
+main_SCMLI_V3.h 
