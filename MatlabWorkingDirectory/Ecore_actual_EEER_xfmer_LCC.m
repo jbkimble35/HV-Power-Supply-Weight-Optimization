@@ -727,10 +727,7 @@ else
     % Calculate temperature rise
     %----------------------------------------------------------------
     
-    % Convert areas to cm^2 before applying the correlation
-    Ac_cm2 = Ac .* 1e4;          % m^2 -> cm^2
-    Wa_cm2 = Wa .* 1e4;          % m^2 -> cm^2
-    Rth    = 16.31 .* (Ac_cm2 .* Wa_cm2) .^ (-0.405);   % K/W
+    Rth    = 0.01631 .* (Ac .* Wa) .^ (-0.405);   % K/W
     Tafterloss = Rth .* (Pcopper + Pcore) + 25;          % °C
 
     % Calculate the weight
