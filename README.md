@@ -1,7 +1,9 @@
 # Acknowledgements
 *This repository includes code and Altium files created by Yiou He and Suzanne O'Meara as part of their thesis work at MIT under the supervision of Professor David Perrault. Their work's original files, architecture, procedures, and data are the foundation to the present implementation in "MatlabWorkingDirectory". The original Altium files & MCU code from Dr. He, and the MATLAB code transcribed to the best of my ability from the thesis PDF, are included in the OriginalWork directory.*
 
- The MCU_and_Altium_files directory contains both the 2017 1st generation HVDC power supply and the 3rd generation SCMLI HV AC power supply.
+Below is the content directly from the thesis work:
+ - The MCU_and_Altium_files directory contains both the Altium files and MCU code for the 2017 1st generation HVDC power supply and the 3rd generation SCMLI HV AC power supply.
+ - The MATLAB_code directory contains (currently) the LLC and RTC Boost driver and function scripts, as well as the SCMLI weight script and approximate full excel data files for CoreSizeData.xlsx, MOSFETs and Capacitor Masses.xlsx, and CoreLossData.xlsx. **The voltage multiplier weight scripts and data are not included.**
 
 ## Details on the specific procedures of each of the scripts is given in the theses available below:
 - [On the Use of Switched-Capacitor Multi-Level Inverters for Electro-Aerodynamic Thrust Applications - Suzanne O'Meara](https://dspace.mit.edu/handle/1721.1/130195)
