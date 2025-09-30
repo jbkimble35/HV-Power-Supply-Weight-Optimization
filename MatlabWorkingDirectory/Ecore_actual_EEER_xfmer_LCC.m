@@ -51,9 +51,9 @@ dielectricstrength_insulation = 0.75 * 200e3 * 100;
 % Minimum primary windings
 MinPriWinding = 1;
 % Maximum primary windings
-MaxPriWinding = 500;
+MaxPriWinding = 501;
 % Incremental primary winding
-IncreNp = 1;
+IncreNp = 10;
 % Maximum layer of primary winding
 MaxMlp = 10;
 % Incremental layer of primary winding
@@ -61,7 +61,7 @@ IncreMlp = 1;
 % Maximum layer of secondary winding
 MaxMls = 50;
 % Incremental layer of secondary winding
-IncreMls = 1;
+IncreMls = 2;
 % Minimum secondary wire diameter (m)
 MinSecWireSize = 0.4e-3;             %#ok<NASGU>
 % Max allowable transformer weight (g)
