@@ -1,5 +1,5 @@
 # Acknowledgements
-*This repository includes code and Altium files created by Yiou He and Suzanne O'Meara as part of their thesis work at MIT under the supervision of Professor David Perrault. Their work's original files, architecture, procedures, and data are the foundation to the present implementation in "MatlabWorkingDirectory". The original Altium files & MCU code from Dr. He, and the MATLAB code transcribed to the best of my ability from the thesis PDF, are included in the OriginalWork directory.*
+*This repository includes code and Altium files created by Yiou He and Suzanne O'Meara as part of their respective theses at MIT under the supervision of Professor David Perrault. Their works' original files, architecture, procedures, and data are the foundation to the present implementation in "MatlabWorkingDirectory". The original Altium files & MCU code from Dr. He, and the MATLAB code transcribed to the best of my ability from the thesis PDF, are included in the OriginalWork directory.*
 
 Below is the content directly from the thesis work:
  - The MCU_and_Altium_files directory contains both the Altium files and MCU code for the 2017 1st generation HVDC power supply and the 3rd generation SCMLI HV AC power supply.
