@@ -3,43 +3,25 @@ function y = Ecore_actual_EEER_xfmer_LCC(raw,raw1,raw2,raw3,raw4,raw5,raw6, ...
 
 %% Tunable Parameters
 
-% Now I am going to edit this script so that it takes into account higher-voltage 
-% transformer design parameters, such as volts-per-layer, epoxy potting, and interlayer tape.
 % The inductor is much lower voltage since it's on the primary side, so it
-% doesn't need these parameters.
-UsePotting      = true;      % set true if vacuum-potted/encapsulated
-Potting_DS      = 20e6;      % V/m, encapsulant dielectric strength (adjust per datasheet)
-CoronaMargin    = 2.0;       % safety factor vs ideal breakdown
-% Need to replace core insulation thickness with a new value, need to take
-% into account the epoxy between wires in each layer and between layers,
-% need to include secondary layer stress and interlayer tape, need to
-% filter designs by their volts-per-layer.
+% doesn't need some of these insulation parameters.
 
-% For HV secondaries, the considerations should be:
-% Smallest magnet wire applicable with high class enamel for auxiliary
-% insulation, then Kapton interlayer tape as thick as possible, making sure
-% to apply some to the edges to prevent arcing on the sides, then
-% potting with HV potting epoxy, then make sure the exit nodes have a
-% suitable airgap and are shielded with HV insulation, joined through some
-% HV heat shrink or rounded soldering inside the epoxy so that outside the
-% transformer is only subject to shielded HV cable.
-% Make sure to apply 2.5-3x safety factor.
-
-
-% Per-turn enamel/laydown (per side), used to form Pri_FullWireSize/Sec_FullWireSize
-t_turn_p = 40e-6;   % 40 µm per side (primary)
-t_turn_s = 60e-6;   % 60 µm per side (secondary, slightly thicker)
+% Potting spec.s
+UsePotting      = true;
+Potting_DS      = 20e6;      % V/m
+CoronaMargin    = 2.0;       % Breakdown voltage safety factor
+% Enamel/Insulation one-sided thickness
+t_turn_p = 40e-6; %m 
+t_turn_s = 60e-6; %m
 % Interlayer tape (e.g., Kapton)
 Tape_Interlayer_Thickness = 50e-6;    % m, per ply
-Tape_Interlayer_DS        = 200e6;    % V/m, breakdown field (≈200 kV/mm for Kapton)
-Tape_Interlayer_Wraps     = 2;        % plies between adjacent layers
-% This is the thickness of epoxy
-% that actually participates in the layer-to-layer barrier
-Interlayer_Epoxy_Thickness = 0;       % m, conservative default
-
+Tape_Interlayer_DS        = 200e6;    % V/m, (≈200 kV/mm for Kapton)
+Tape_Interlayer_Wraps     = 2;
+% This is the thickness of epoxy between layers
+Interlayer_Epoxy_Thickness = 0;       % m
 % GPU computing options
-useGPU = false;            % <— flip this to enable/disable GPU path
-useSingleOnGPU = false;    % single precision halves memory on the GPU
+useGPU = true;
+useSingleOnGPU = false;
 % Minimum transformer efficiency
 etaXfmer = 0.85;
 % Max operating temp in Celsius
