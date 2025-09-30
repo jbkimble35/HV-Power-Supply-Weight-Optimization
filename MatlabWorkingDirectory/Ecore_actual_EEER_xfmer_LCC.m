@@ -205,20 +205,22 @@ for i = 1:1:NoMat
 end
 
 
-%Core size
+
+% Core size
 %-------------------------------------------
 
+% CoreSizeData should all be in mm, mm2, and mm3.
 [m1,~] = size(raw);
 TransformerCoreIndex = cell2mat(raw(2:m1,1));
-XcoreVe = cell2mat(raw(2:m1,3))/(1000^3); % in m
-XcoreAe = cell2mat(raw(2:m1,4))/(1000^2);
-XcoreLe = cell2mat(raw(2:m1,5))/1000;
+XcoreVe = cell2mat(raw(2:m1,3))/(1000^3); % mm3 to m3
+XcoreAe = cell2mat(raw(2:m1,4))/(1000^2); % mm2 to m2
+XcoreLe = cell2mat(raw(2:m1,5))/1000; % mm to m
 
 XcoreCoreShapeIndex = cell2mat(raw(2:m1,6));
-XcorePriW = cell2mat(raw(2:m1,8))/1000;
-XcorePriH = cell2mat(raw(2:m1,9))/1000;
-XcoreSecW = cell2mat(raw(2:m1,10))/1000;
-XcoreSecH = cell2mat(raw(2:m1,11))/1000;
+XcorePriW = cell2mat(raw(2:m1,8))/1000; % mm to m
+XcorePriH = cell2mat(raw(2:m1,9))/1000; % mm to m
+XcoreSecW = cell2mat(raw(2:m1,10))/1000; % mm to m
+XcoreSecH = cell2mat(raw(2:m1,11))/1000; % mm to m
 
 % PriW means primary winding width
 % PriH means primary winding height
@@ -245,12 +247,8 @@ XcoreSecH = cell2mat(raw(2:m1,11))/1000;
 % rAc is core radius in ER, UR cores.
 
 XcoreWindowW = cell2mat(raw(2:m1,12))/1000;
-
-XcoreWindowH = cell2mat(raw(2:m1,13))/1000;
-
-%XcoreWindowH = 2*cell2mat(raw(2:m1,13))/1000;
-%Replaced since GPT says the sheet already has full window height but this
-%is based on my naming it so I have to cross reference with the thesis
+XcoreWindowH = 2*cell2mat(raw(2:m1,13))/1000;
+% I was using it without the 2* for some time
 
 ShuffleIndex = 1:1:length(TransformerCoreIndex);
 
