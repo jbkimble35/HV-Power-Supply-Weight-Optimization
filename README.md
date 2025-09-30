@@ -1,6 +1,8 @@
 # Acknowledgements
 *This repository includes code and Altium files created by Yiou He and Suzanne O'Meara as part of their thesis work at MIT under the supervision of Professor David Perrault. Their work's original files, architecture, procedures, and data are the foundation to the current implementation. To the best of my ability in transcribing the code from PDFs, the unedited code and original Altium files are included in the OriginalWork directory.*
 
+OriginalWork contains the original MATLAB code, & OriginalFiles contains the original code and Altium files for the working power supplies outlined in the theses, both the 2017 1st generation HVDC power supply, and the 3rd generation SCMLI HV AC power supply.
+
 ## Details on the specific procedures of each of the scripts is given in the theses available below:
 - [On the Use of Switched-Capacitor Multi-Level Inverters for Electro-Aerodynamic Thrust Applications - Suzanne O'Meara](https://dspace.mit.edu/handle/1721.1/130195)
 - [Towards Lightweight High-Voltage Power Conversion - Yiou He](https://dspace.mit.edu/handle/1721.1/128589
@@ -33,6 +35,6 @@ This is a script modified from the 2020 thesis by Yiou He: "Towards High Voltage
 - Currently am fixing up the RTC script so that the excel writing and global variables are removed from the parfor loop, so the RTC script largely matches the inverter transformer one. I already made the Design(1 to 33).data into Design( : , 1 to 32), erased global variables, erased some of the excel writing and runNumber stuff, and need to match the two scripts now one to one with the loop parts. I also made the driver script have a parfor loop to match the other one.
 
 ## Future Work:
-- Import Voltage Multiplier weight script
+- Import Voltage Multiplier weight scripts
 
 
