@@ -339,7 +339,7 @@ end
 
 % Select Steinmetz params near each fs and expand design rows accordingly
 FsnoNonzero = F_atPv_500(matno_record,:) > 0;
-FsnoIndex = abs(fs - F_atPv_500(matno_record ,:))./fs <= 0.2;
+FsnoIndex = abs(fs - F_atPv_500(matno_record ,:))./fs <= 0.4;
 % 20% away is the 0.2
 matfsIndex = FsnoNonzero.*FsnoIndex;
 matfs = F_atPv_500(matno_record,:).*matfsIndex;
@@ -727,6 +727,12 @@ else
     % Calculate temperature rise
     %----------------------------------------------------------------
     
+    
+    % If too large, then check Pcopper and Pcore.
+
+        % If primary resistance too large, then
+        % Likely wire thickness too low
+
     Rth    = 0.01631 .* (Ac .* Wa) .^ (-0.405);   % K/W
     Tafterloss = Rth .* (Pcopper + Pcore) + 25;          % °C
 
