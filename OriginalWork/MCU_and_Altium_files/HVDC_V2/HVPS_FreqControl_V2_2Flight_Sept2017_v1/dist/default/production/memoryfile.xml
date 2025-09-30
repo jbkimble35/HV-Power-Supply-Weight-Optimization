@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<project>
+  <executable name="dist/default/production/HVPS_FreqControl_V2_2Flight_Sept2017_v1.production.elf">
+    <memory name="data">
+      <units>bytes</units>
+      <length>9216</length>
+      <used>282</used>
+      <free>8934</free>
+    </memory>
+    <memory name="program">
+      <units>bytes</units>
+      <length>65280</length>
+      <used>15555</used>
+      <free>49725</free>
+    </memory>
+  </executable>
+</project>
