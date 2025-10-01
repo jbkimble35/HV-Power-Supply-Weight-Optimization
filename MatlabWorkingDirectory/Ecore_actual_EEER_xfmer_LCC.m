@@ -7,22 +7,20 @@ function y = Ecore_actual_EEER_xfmer_LCC(raw,raw1,raw2,raw3,raw4,raw5,raw6, ...
 % The inductor is much lower voltage since it's on the primary side, so it
 % doesn't need some of these insulation parameters.
 
+% Does Ve and its equations take into account the fact that core datasheets give halves?
+
 % Insulation
 %-------------------------------------------
 
 % Potting spec.s
-UsePotting      = true;
+UsePotting      = false;
 Potting_DS      = 20e6;      % V/m
 CoronaMargin    = 2.0;       % Breakdown voltage safety factor
-
-% Enamel/Insulation one-sided thickness
-t_turn_p = 40e-6; %m 
-t_turn_s = 60e-6; %m
 
 % Interlayer tape (e.g., Kapton)
 Tape_Interlayer_Thickness = 50e-6;    % m, per ply
 Tape_Interlayer_DS        = 200e6;    % V/m, (≈200 kV/mm for Kapton)
-Tape_Interlayer_Wraps     = 2;
+Tape_Interlayer_Wraps     = 1;
 
 % Thickness of epoxy between layers
 Interlayer_Epoxy_Thickness = 0;       % m
@@ -37,7 +35,7 @@ useSingleOnGPU = false;
 %-------------------------------------------
 
 % Minimum transformer efficiency
-etaXfmer = 0.85;
+etaXfmer = 0.95;
 % Max operating temp in Celsius
 Tmax = 100;
 % Min operating temp in Celsius
@@ -46,36 +44,36 @@ Tmin = 25;
 Jwmax = 500*100*100;
 % Minimal litz diameter (A/m^2)
 MinLitzDia = 0.07874e-3; % AWG40
-% Dielectric strength of insulation material (V/m) 25% derated
-dielectricstrength_insulation = 0.75 * 200e3 * 100;
+% Dielectric strength of insulation material (V/m) 50% derated
+dielectricstrength_insulation = 0.5 * 200e3 * 100;
 % Minimum primary windings
 MinPriWinding = 1;
 % Maximum primary windings
-MaxPriWinding = 501;
+MaxPriWinding = 40;
 % Incremental primary winding
-IncreNp = 10;
+IncreNp = 1;
 % Maximum layer of primary winding
-MaxMlp = 10;
+MaxMlp = 5;
 % Incremental layer of primary winding
 IncreMlp = 1;
 % Maximum layer of secondary winding
-MaxMls = 50;
+MaxMls = 10;
 % Incremental layer of secondary winding
-IncreMls = 2;
+IncreMls = 1;
 % Minimum secondary wire diameter (m)
 MinSecWireSize = 0.4e-3;             %#ok<NASGU>
 % Max allowable transformer weight (g)
-MaxWeight = 300000;
+MaxWeight = 5000;
 CoreInsulationDensity = 2.2e6;       % g/m^3 (Teflon)
 WireInsulationDensity = 2.2e6;       % g/m^3 (Teflon)
 % Saturation flux density derating
-BSAT_discount = 0.9;
+BSAT_discount = 0.75;
 % Core loss multiplier
 CoreLossMultiple = 1.5;
-maxpackingfactor = 0.99;
+maxpackingfactor = 0.7;
 minpackingfactor = 0.01;
 % Litz copper fill
-LitzFactor = 0.8;
+LitzFactor = 0.75;
 % For solid core:
 SolidGate = 1.5; % factor of skindepth threshold to go from solid to litz
 
@@ -147,9 +145,12 @@ CoreDensity   = cell2mat(raw6(2:m1,3))*1000000;
 Pbar = 500;      % mW/cm^3 reference level
 PFfactor = 1;
 
+% Build Steinmetz parameter sets around the target frequency
+% ----------------------------------------------
+
 NoMat = m1-1;
 FreqFlag    = zeros(size(1:1:NoMat));
-maxFreqPairs = floor((size(XCoreFreq,2))/2);  % or compute from your sheets
+maxFreqPairs = floor((size(XCoreFreq,2))/2);
 ConstantA      = zeros(NoMat, maxFreqPairs);
 ConstantB      = zeros(NoMat, maxFreqPairs);
 B_atPv_500     = zeros(NoMat, maxFreqPairs);
@@ -236,26 +237,27 @@ XcoreSecH = cell2mat(raw(2:m1,11))/1000; % mm to m
 
 % If ER core:
     % If center-leg:
-        % PriW=rAc and PriH=N/A
+        % PriW=2*rAc and PriH=N/A
         % SecW and SecH N/A
     % If double-leg:
         % I don't think this is in the script
+
+% from the data given in the thesis, 
+
+
 
 % Lc is center-leg width
 % T is core thickness in EE/U cores
 % rAc is core radius in ER, UR cores.
 
 XcoreWindowW = cell2mat(raw(2:m1,12))/1000;
-XcoreWindowH = 2*cell2mat(raw(2:m1,13))/1000;
-% I was using it without the 2* for some time
-
+XcoreWindowH = cell2mat(raw(2:m1,13))/1000;
 ShuffleIndex = 1:1:length(TransformerCoreIndex);
 
 % DESIGN SWEEP
 %% ------------------------------------------------------------------------
 
 CoreMatIndexSweep = find(FreqFlag);
-
 
 % N-Dimensional grid expansion, 
 % then shrinking based on some initial filters
@@ -414,11 +416,12 @@ else
 
     % Electricals & losses
     % -------------------------------------
+
     skindepth = 1./sqrt(pi*fs*u0/rou);
     k  = Vspeak./Vppeak;
     Ns = round(Np.*k)+1;
     % Primary Current
-    Iprms = Po/etaXfmer./(Vppeak/sqrt(2));
+    Iprms = (Po/etaXfmer)./(Vppeak/sqrt(2));
     Ippeak = Iprms*sqrt(2);
     % Secondary Current
     Isrms  = Po./(Vspeak/sqrt(2));
@@ -437,26 +440,26 @@ else
     Ploss_est = Pin - Po;
     % Window area (m)
     Wa = H.*W;
-    % Core volume (m3)
-    Vcore = Ve;
 
     % Core weight (g)
     % -------------------------------------
     
     densityRow = CoreDensity(matno_record);
-    assert(numel(densityRow)==numel(Vcore),'Core density mapping mismatch');
-    Wcore = Vcore.*densityRow;
+    Wcore = Ve.*densityRow;
     
     % Calculate Bmax (T)
     % -------------------------------------
+
     Bm = lamda./(2.*Np.*Ac);
     
     % Calculate core loss (W)
     % -------------------------------------
-    Pcore = CoreLossMultiple.*Vcore.*K1.*fs.^alpha.*Bm.^beta;
+
+    Pcore = CoreLossMultiple.*Ve.*K1.*fs.^alpha.*Bm.^beta;
 
     % Determine wire type, and num of strands if Litz
-    % -------------------------------------
+    % -----------------------------------------------
+
     Areq_p=Iprms./Jwmax;                                % [m^2]
     Areq_s=Isrms./Jwmax;                                % [m^2]
     
@@ -471,6 +474,7 @@ else
     
     % Primary
     % ----------------
+    wireInsulPriRadius = Vppeak./dielectricstrength_insulation; 
     Pri_Nstrands=ones(size(Iprms));
     Pri_Nstrands(~useSolid_p)=ceil(Areq_p(~useSolid_p)./AstrandMin(~useSolid_p));
     Pri_WireDia=dsolid_p;
@@ -480,10 +484,13 @@ else
     end
     Pri_ds=dsolid_p;                                     % effective strand dia for AC model
     Pri_ds(idx)=dstrandMinlitz(idx);
-    Pri_FullWireDia = Pri_WireDia + 2.*t_turn_p;
+    Pri_FullWireDia = Pri_WireDia + 2.*wireInsulPriRadius;
+    A_pri_cu  = (pi.*(Pri_WireDia.^2))./4;      % m^2 per turn
+    A_pri_full= (pi.*(Pri_FullWireDia.^2))./4;  % includes jacket
     
     % Secondary
     % ----------------
+    wireInsulSecRadius = Vspeak./dielectricstrength_insulation;
     Sec_Nstrands=ones(size(Isrms));
     Sec_Nstrands(~useSolid_s)=ceil(Areq_s(~useSolid_s)./AstrandMin(~useSolid_s));
     Sec_WireDia=dsolid_s;
@@ -493,18 +500,15 @@ else
     end
     Sec_ds=dsolid_s;                                     % effective strand dia for AC model
     Sec_ds(idx)=dstrandMinlitz(idx);
-    Sec_FullWireDia = Sec_WireDia + 2.*t_turn_s;
-
-    A_pri_cu  = (pi.*(Pri_WireDia.^2))./4;      % m^2 per turn
+    Sec_FullWireDia = Sec_WireDia + 2.*wireInsulSecRadius;
     A_sec_cu  = (pi.*(Sec_WireDia.^2))./4;
-    A_pri_full= (pi.*(Pri_FullWireDia.^2))./4;  % includes enamel
     A_sec_full= (pi.*(Sec_FullWireDia.^2))./4;
     
-    CopperPacking  = (A_pri_cu.*Np + A_sec_cu.*(Ns./2))./ (H.*W);
-    OverallPacking = (A_pri_full.*Np + A_sec_full.*(Ns./2))./ (H.*W);
+    CopperPacking  = (A_pri_cu.*Np + A_sec_cu.*(Ns./2))./ (Wa);
+    OverallPacking = (A_pri_full.*Np + A_sec_full.*(Ns./2))./ (Wa);
 
     % Winding structure
-    % ----------------
+    % --------------------
     
     DS_clearance = (UsePotting).*Potting_DS+(~UsePotting).*dielectricstrength_insulation;
     CoreInsulationThickness = CoronaMargin .* Vinsulation_max ./ DS_clearance;
@@ -512,7 +516,7 @@ else
     Sec_PerLayer=floor(Ns./Mls);
     
     % Interlayer param.s
-    % -----------------
+    % ---------------------
     
     % Effective radial build added between adjacent secondary layers (geometry)
     t_interlayer_radial = Tape_Interlayer_Wraps .* Tape_Interlayer_Thickness ...
@@ -533,6 +537,7 @@ else
     % Computes mean length of turn for pri and sec, accounting for geometry
     % and winding pattern
     %-----------------------------------------------------------------------------
+    
     if useGPU
         % Move inputs for this block to GPU
         shape_g    = toGPU(int32(XcoreCoreShapeIndex));
@@ -653,10 +658,8 @@ else
         end
     end
 
-
-
     % Calculate leakage inductance (not verified or used in this code)
-    %------------------------
+    %--------------------------------------------------------------------
 
     Lg = u0.*(W - Mls.*Sec_FullWireDia - Mlp.*Pri_FullWireDia).*SecH./H;
         %in Henry
@@ -687,8 +690,8 @@ else
         Asec_g = toGPU(A_sec_cu);
     
         % --- Dowell AC resistance ---
-        Rdc_p_g = rou_s .* TLp_g ./ (Apri_g);
-        Rdc_s_g = rou_s .* TLs_g ./ (Asec_g);
+        Rdc_p_g = rou_s .* TLp_g ./ (PriN_g .* (pi.*(dsPri_g.^2)./4));
+        Rdc_s_g = rou_s .* TLs_g ./ (SecN_g .* (pi.*(dsSec_g.^2)./4));
     
         % Primary
         Kp_g = sqrt(pi .* PriN_g) .* dsPri_g ./ (2 .* PriDia_g);
@@ -718,8 +721,8 @@ else
     
         TLp = TLp';
         TLs = TLs';
-        Pri_Rdc = rou.*TLp./(A_pri_cu);
-        Sec_Rdc = rou.*TLs./(A_sec_cu);
+        Pri_Rdc = rou.*TLp./((pi.*Pri_WireDia.^2)./4);
+        Sec_Rdc = rou.*TLs./((pi.*Sec_WireDia.^2)./4);
         Pri_Fr = Pri_xp.*((sinh(2.*Pri_xp) + sin(2.*Pri_xp))./(cosh(2.*Pri_xp) - cos(2.* ...
             Pri_xp)) + 2.*(Mlp.^2.*Pri_Nstrands - 1)./3.*(sinh(Pri_xp) - sin(Pri_xp))./( ...
             cosh(Pri_xp) + cos(Pri_xp)));
@@ -734,11 +737,14 @@ else
     % Calculate temperature rise
     %----------------------------------------------------------------
 
-    Rth    = 0.01631 .* (Ac .* Wa) .^ (-0.405);   % K/W
+    Rth    = 16.31e-3 .* (Ac .* Wa) .^ (-0.405);   % K/W
     Tafterloss = Rth .* (Pcopper + Pcore) + 25;          % °C
 
-    % Calculate the weight
+    % Weight of core insulation
     %----------------------------------------------------------------
+
+    % Must add weight of potting and weight of tape here, this is just
+    % core liner of teflon
 
     if useGPU
         shape_g   = toGPU(int32(XcoreCoreShapeIndex));
@@ -753,8 +759,7 @@ else
             shape_g, H_g, W_g, priW_g, priH_g, tcore_g, dens_g));
     else
         % CPU code version
-        % Need to calculate WeightCore_Insu independently for each geometry
-        % Preallocate
+
         WeightCore_Insu = zeros(size(Np));
         % EE
         WeightCore_Insu(isEE) = ( ...
@@ -946,11 +951,11 @@ else
     Index_Meet_All = intersect(B_index,P_loss_index);
     Index_Meet_All = intersect(Index_Meet_All,Tafterloss_index);
     Index_Meet_All = intersect(Index_Meet_All,Tmin_index);
-    Index_Meet_All = intersect(Index_Meet_All, Interlayer_index);
+    Index_Meet_All = intersect(Index_Meet_All,Interlayer_index);
     Index_Meet_All = intersect(Index_Meet_All,TotalWeight_index);
     Index_Meet_All = intersect(Index_Meet_All,OverallPackingmin_index);
     Index_Meet_All = intersect(Index_Meet_All,OverallPackingmax_index);
-    Index_Meet_All = intersect(Index_Meet_All, WindowFit_index);
+    Index_Meet_All = intersect(Index_Meet_All,WindowFit_index);
 
     % Sort by total weight and keep only the lightest one
     [~,SortIndex] = sort(TotalWeight(Index_Meet_All));
@@ -963,7 +968,7 @@ else
 
         V_cu     = ((WeightPri_copper+WeightSec_copper))/CopperDensity;
         V_insu   = ((WeightCore_Insu+WeightPri_Insu+WeightSec_Insu))/CoreInsulationDensity;
-        Volume_m3 = Vcore + V_cu + V_insu;
+        Volume_m3 = Ve + V_cu + V_insu;
 
         Design(:, 1)  = Po(TotalWeightSortIndex);
         Design(:, 2)  = Vppeak(TotalWeightSortIndex);
@@ -1031,7 +1036,7 @@ function [tLp,tLs] = computeTL_one(shape,np,ns,priW,priH,secW,secH,tcore,mlp,mls
         % -------- Center-leg --------
         if shape==1   % EE rectangular window
             tLp = np*2*(priW+priH+4*tcore+2*mlp*priFull);
-            % add 2*(mls*secFull + (mls-1)*tinter) for radial build
+            % add 2*(mls*secFull + (mls-1)*tinter) for radial
             tLs = ns*2*(priW+priH+4*mlp*priFull+8*tcore ...
                  + 2*( mls*secFull + max(mls-1,0)*tinter ));
         elseif shape==2 % ER circular
