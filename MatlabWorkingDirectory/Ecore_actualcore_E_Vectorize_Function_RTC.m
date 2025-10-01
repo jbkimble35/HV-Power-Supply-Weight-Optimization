@@ -1,10 +1,15 @@
-function y = Ecore_actualcore_E_Vectorize_Function_RTC(Date, RunNumber, Hypothesis, Notes,...
+function y = Ecore_actualcore_E_Vectorize_Function_RTC(...
     Vin_range , G_range, Po_range , Vinsulation_max_range , Winding_Pattern, raw, raw1, raw2, ...
-    raw3, raw4, raw5)
+    raw3, raw4, raw5,raw6)
 
-CodeName = 'Ecore_actualcore_E_Vectorize_Function_RTC.m';
+% Tunable Parameters
+%% -------------------------------------------------------------------------------------
 
-% Lowest allowed transformer efficiency
+
+% Inductor parameters
+%-------------------------------------------
+
+% Lowest allowed inductor efficiency
 etaInductor = 0.95;
 % Max allowable temperature (C)
 Tmax = 100;
@@ -15,25 +20,29 @@ Jwmax = 500*100*100;
 % Minimal litz diameter one can get (m)
 MinLitzDia = 0.05024/1000; %YAWG44, 0.0316 is AWG48, %0.03983 is
 % Dielectric strength of the insulation material (V/m) , discount
-dielectricstrength_insulation = 0.5*200*1000*100; %IEFLON
+dielectricstrength_insulation = 0.5*200*1000*100; %TEFLON
 % minimal air gap (m)
-mingap = 100e-6;
-
+mingap = 1e-4;
+maxgap = 2e-2;
+numGaps = 1;
+% Minimum primary windings
 MinWinding = 1;
 % Maximum turns
 MaxWinding = 10;
 % Incremental winding
 IncreN = 1;
 % Maximum layer of winding
-MaxMl = 10;
+MaxMl = 1;
 % Incremental layers
 IncreMl = 1;
 % Minimal wire diameter (m)
 MinWireSize = 0.079/1000; %AWG28, 0.35 mm is AWG29, 0.079 is AWG40
 % Maximum allowable weight (g)
 MaxWeight = 200;
-% g/m3, density of the core
-CoreDensity = 4.8*1000*1000;
+
+% Electrical constants
+%-------------------------------------------
+
 % g/m3, density of copper
 CopperDensity = 8.96*1000*1000;
 % g/m3, density of core insulation materials
@@ -41,7 +50,9 @@ CoreInsulationDensity = 2.2*1000*1000; %TEFLON
 % g/m3, density of wire insulation materials
 WireInsulationDensity = 2.2*1000*1000; %IEFLON
 
-% all discount factors
+% Discount factors
+%--------------------------------------------
+
 % Bmax discount factor
 BSAT_discount = 0.85;
 % Actual core loss is always higher than the calculated
@@ -52,10 +63,7 @@ maxpackingfactor = 0.7;
 minpackingfactor = 0.01;
 % Winding factor of litz wire , assuming only 80% of wire size is copper
 LitzFactor = 0.8;
-% Weight of bobbin as a faction of the core insulation
-BobbinWeightFactor = 0.5;
 
-Design = zeros(1,33);
 % The variables and constants in this section are predefined. Recommend
 % users not change them unless necessary
 
@@ -70,20 +78,28 @@ u0 = 4*pi*10^(-7);
 ebs10 = 8.854*1e-12;
 
 %% MAIN BODY OF THE CODE STARTS FROM HERE
-% Read the material properties to get the P at different B and F map from
-% the CoreLossData.xlsx file
-% This map will be used to calculate core loss later on
-[m1,n1] = size(raw1);
-XCoreMAT = raw1(2:m1,2);
-XCoreFreq = cell2mat(raw1(2:m1,3:n1));
-[m1,n1] = size(raw2);
-XCoreBfield = cell2mat (raw2(2:m1,3:n1));
-[m1,n1] = size(raw3);
-XCorePloss = cell2mat(raw3(2:m1,3:n1));
-[m1,n1] = size(raw4);
-XCoreBSAT = cell2mat(raw4(2:m1,3:n1));
-[m1,n1] = size(raw5);
-XCoreMU = cell2mat(raw5(2:m1,3:n1));
+%----------------------------------------------
+
+Design = zeros(1,33);
+
+% Parse core loss material maps from CoreLossData.xlsx
+[m1,n1]   = size(raw1);
+LCoreFreq = cell2mat(raw1(2:m1,3:n1));
+[m1,n1]   = size(raw2);
+LCoreBfield = cell2mat(raw2(2:m1,3:n1));
+[m1,n1]   = size(raw3);
+LCorePloss   = cell2mat(raw3(2:m1,3:n1));
+% Only parses column C
+[m1,~]    = size(raw4);
+LCoreBSAT = cell2mat(raw4(2:m1,3));
+% Only parses column C
+[m1,~]    = size(raw5);
+LCoreMU   = cell2mat(raw5(2:m1,3));
+[m1,~]    = size(raw6);
+CoreDensity   = cell2mat(raw6(2:m1,3))*1000000;
+
+% Build Steinmetz parameter sets around the target frequency
+% ----------------------------------------------
 
 % Constant
 Pbar = 500; %500mW/cm3
@@ -91,17 +107,15 @@ PFfactor = 1;
 
 % Draw out Pv plot vs B then interpolate
 NoMat = m1-1;
-Ball = 0.001:0.001:1;
-MATcolorvector = rand(NoMat,3);
 FreqFlag = zeros(size(1:1:NoMat));
 for i = 1:1:NoMat
-    DataSheetFreq = XCoreFreq(i, ~isnan(XCoreFreq(i,:)));
+    DataSheetFreq = LCoreFreq(i, ~isnan(LCoreFreq(i,:)));
     NoFreq = length (DataSheetFreq)/2;
-    colorvector = rand(NoFreq,3);
+
     for j = 1:1:NoFreq
         %Pv = ConstantA*Bfield+ConstantB
-        ConstantA(i, j) = (log10(XCorePloss(i,2*j)) - log10(XCorePloss( i ,2*j -1)))/(log10(XCoreBfield(i,2*j)) - log10(XCoreBfield(i,2*j-1)));
-        ConstantB(i, j) = log10(XCorePloss(i ,2*j)) - ConstantA(i,j)*log10(XCoreBfield(i,2*j));
+        ConstantA(i, j) = (log10(LCorePloss(i,2*j)) - log10(LCorePloss( i ,2*j -1)))/(log10(LCoreBfield(i,2*j)) - log10(LCoreBfield(i,2*j-1)));
+        ConstantB(i, j) = log10(LCorePloss(i ,2*j)) - ConstantA(i,j)*log10(LCoreBfield(i,2*j));
         B_atPv_500(i, j) = 10^((log10(Pbar) - ConstantB(i,j))/ConstantA(i,j)); % in T
         F_atPv_500(i, j) = DataSheetFreq(2*j-1); % in Hz
         PF_atPv_500(i, j) = B_atPv_500(i, j)*F_atPv_500(i, j)^PFfactor;
@@ -111,40 +125,44 @@ for i = 1:1:NoMat
         % end
         % Steinmetz
         if (j > 1)
-            beta_range(i ,j) = log10(XCorePloss(i,2*j)/XCorePloss(i ,2*j-1))/log10(XCoreBfield(i ,2*j )/XCoreBfield(i ,2*j -1));
+            beta_range(i ,j) = log10(LCorePloss(i,2*j)/LCorePloss(i ,2*j-1))/log10(LCoreBfield(i ,2*j )/LCoreBfield(i ,2*j -1));
             %Third point
-            XCorePloss_3rd(i, j) = 10.^(ConstantA(i, j -1)*log10(XCoreBfield(i,2*j)) + ConstantB(i ,j-1));
-            alpha_range(i, j) = log10(XCorePloss_3rd(i ,j)/XCorePloss(i,2*j))/log10(DataSheetFreq(2*j -3)/DataSheetFreq(2*j -1)); %(f2/fl)^alpha = P2/P1;
-            K1_range(i,j) = XCorePloss(i ,2*j)/(XCoreBfield(i ,2*j)^ beta_range(i, j)) /(DataSheetFreq(2*j-1)^alpha_range(i, j)); %W/cm3
+            XCorePloss_3rd(i, j) = 10.^(ConstantA(i, j -1)*log10(LCoreBfield(i,2*j)) + ConstantB(i ,j-1));
+            alpha_range(i, j) = log10(XCorePloss_3rd(i ,j)/LCorePloss(i,2*j))/log10(DataSheetFreq(2*j -3)/DataSheetFreq(2*j -1)); %(f2/fl)^alpha = P2/P1;
+            K1_range(i,j) = LCorePloss(i ,2*j)/(LCoreBfield(i ,2*j)^ beta_range(i, j)) /(DataSheetFreq(2*j-1)^alpha_range(i, j)); %W/cm3
             %Repeat frequency 2's steinmetz parameter for frequency 1
             if (j == 2)
                 beta_range(i ,j-1) = beta_range(i,j);
                 alpha_range(i ,j-1)= alpha_range(i ,j);
-                K1_range(i ,j -1) = XCorePloss(i ,2*j-2)/(XCoreBfield(i ,2*j -2)^beta_range(i ,j -1))/(DataSheetFreq(2*j -3)^alpha_range(i ,j-1));
+                K1_range(i ,j -1) = LCorePloss(i ,2*j-2)/(LCoreBfield(i ,2*j -2)^beta_range(i ,j -1))/(DataSheetFreq(2*j -3)^alpha_range(i ,j-1));
             end
         end
     end
 end
 
 % Core size
+%-------------------------------------------
+
 [m1,n1] = size(raw);
 % Column order:
 % Ve(mm3), Ae (mm2) , Le (mm) , CoreShapeIndex, WindingPatternIndex, Window W (mm),...
 % Half Window H (mm), Core W (mm),
 % Half Core H (mm) , Core Thick (mm) , Center Leg Diameter (mm) , Total Window W (mm)
-XCoreIndex = cell2mat(raw(2:m1, 1)) ;
-XcoreVe = cell2mat(raw(2:m1,3))/(1000^3); % in m
-XcoreAe = cell2mat(raw(2:m1,4))/(1000^2);
-XcoreLe = cell2mat(raw(2:m1,5))/1000;
-XcoreCoreShapeIndex = cell2mat(raw(2:m1,6));
-XcorePriW = cell2mat(raw(2:m1,8))/1000;
-XcorePriH = cell2mat(raw(2:m1,9))/1000;
-XcoreSecW = cell2mat(raw(2:m1,10))/1000;
-XcoreSecH = cell2mat(raw(2:m1,11))/1000;
-XcoreWindowW = cell2mat(raw(2:m1,12))/1000;
-XcoreWindowH = 2*cell2mat(raw(2:m1,13))/1000;
+LCoreIndex = cell2mat(raw(2:m1, 1)) ;
+LcoreVe = cell2mat(raw(2:m1,3))/(1000^3); % in m
+LcoreAe = cell2mat(raw(2:m1,4))/(1000^2);
+LcoreLe = cell2mat(raw(2:m1,5))/1000;
+LcoreCoreShapeIndex = cell2mat(raw(2:m1,6));
+LcorePriW = cell2mat(raw(2:m1,8))/1000;
+LcorePriH = cell2mat(raw(2:m1,9))/1000;
+LcoreSecW = cell2mat(raw(2:m1,10))/1000;
+LcoreSecH = cell2mat(raw(2:m1,11))/1000;
+LcoreWindowW = cell2mat(raw(2:m1,12))/1000;
+LcoreWindowH = 2*cell2mat(raw(2:m1,13))/1000;
 
-% DESIGN STARTS FROM HERE
+% DESIGN SWEEP
+%% ------------------------------------------------------------------------
+
 % This section lists all possible designs and prepare for the parfor loop
 % in the next section
 
@@ -153,7 +171,9 @@ CoreMatIndexSweep = find(FreqFlag);
 
 % Vectorize the design space
 [Po, Vin ,G, matno_record , CoreIndex ,Np, Mlp, airgap] = ndgrid(Po_range ,Vin_range,...
-G_range , CoreMatIndexSweep , XCoreIndex , MinWinding:IncreN:MaxWinding,1:IncreMl:MaxMl, mingap:mingap:100*mingap);
+G_range , CoreMatIndexSweep , LCoreIndex , MinWinding:IncreN:MaxWinding,1:IncreMl:MaxMl, linspace(mingap,maxgap,numGaps));
+
+% Flatten
 Po = reshape(Po,[] ,1);
 Vin = reshape(Vin, [] , 1);
 G = reshape(G,[] ,1);
@@ -165,27 +185,26 @@ CoreIndex = reshape(CoreIndex , [] , 1);
 
 
 % Map CoreSize to actual size
-Vcore = XcoreVe(CoreIndex); % in cm
-Ac = XcoreAe(CoreIndex) ;
-W = XcoreWindowW(CoreIndex);
-H = XcoreWindowH(CoreIndex);
-Le = XcoreLe(CoreIndex);
-Center_L = XcorePriW(CoreIndex);
-Center_T = XcorePriH (CoreIndex);
+Vcore = LcoreVe(CoreIndex); % in cm
+Ac = LcoreAe(CoreIndex) ;
+W = LcoreWindowW(CoreIndex);
+H = LcoreWindowH(CoreIndex);
+Le = LcoreLe(CoreIndex);
+Center_L = LcorePriW(CoreIndex);
+Center_T = LcorePriH (CoreIndex);
 
 % Map material
-ui = XCoreMU(matno_record);
-BSAT = XCoreBSAT(matno_record);
+ui = LCoreMU(matno_record);
+BSAT = LCoreBSAT(matno_record);
 
 % Inductance following RTC operating principles
 Vo = Vin.*G;
-Vinsulation_max = Vo;
 L = u0*Ac.*Np.^2./(airgap + Le./ui);
 % compute RTC boost timing and frequency
 Ctot = 160e-12; % Assume using two GS66502T in parallel , 40 pF, two C3D1P7060 in parallel , 20 pF, 
 % with some room
 
-parfor xx = 1:length(L)
+for xx = 1:length(L)
     sigma=(Vo(xx)-2*Vin(xx))./(Vo(xx)-Vin(xx));
     theta=acos(1-sigma);
     tring(xx)=(pi-theta).*sqrt(L(xx).*Ctot);
@@ -199,6 +218,7 @@ parfor xx = 1:length(L)
     I=roots(p);
     Ipeak(xx)=I(1);
 end
+
 tring = reshape(tring ,[] , 1);
 Ilpeak = reshape(Ilpeak ,[] ,1);
 tlrise = reshape(tlrise ,[] ,1);
@@ -213,11 +233,13 @@ ILave = (Ipeak.*(trise + thold + tfall)/2 + Ilpeak.*(tring + tlrise)/2)./T;
 
 % Eliminate some elements based on dimension rule and BSAT rule
 KeepAirGap = intersect(find(airgap >= mingap) , find(airgap <= 0.2*Le));
+if isempty(KeepAirGap)
+    warning("No feasible airgap: requested inductance larger than ungapped L0 for all cores/turns.");
+end
 ue = ui./(1+ui.*airgap./Le);
 Bm_dummy = u0.*Np.*Ipeak./Le.*ue; %T
 Keep_Bmindex = find(Bm_dummy < BSAT*BSAT_discount);
-% changed min from 1MHz to 100kHz
-Keep_fsindex = intersect(find(fs >= 100000) ,find(fs <= 3000000));
+Keep_fsindex = intersect(find(fs >= 1000000) ,find(fs <= 3000000));
 KeepIndex = intersect(intersect(KeepAirGap,Keep_Bmindex),Keep_fsindex);
 
 Po = Po(KeepIndex);
@@ -303,9 +325,12 @@ K1 = nonzeros(reshape(K1(UniqueRowIdcs,:)',[],1));
 beta = nonzeros(reshape(beta(UniqueRowIdcs,:)',[],1));
 alpha = nonzeros(reshape(alpha(UniqueRowIdcs,:)',[],1));
 
-%size (Po)
+% For the remaining indexes, compute the more detailed parameters 
+% like losses, size, subsequent weight
+% -------------------------------------------------------------------
+
 if (isempty(Po))
-    y = 0;
+    y = zeros(1,32);
 else
     %Repeat elements by Primary Wire Number of Strands
     skindepth = 1./sqrt(pi*fs*u0/rou);
@@ -315,7 +340,7 @@ else
     % Window area (m)
     Wa = H.*W;
     % Core weight (g)
-    Wcore = Vcore .* CoreDensity;
+    Wcore = Vcore.*CoreDensity(matno_record);
 
     % Winding
     % Primary wire diameter (m)
@@ -348,10 +373,10 @@ else
     Pcopper = (Po./Vin).^2.*Pri_Rdc + (Ipeak - Ilpeak).^2/8.*Pri_Rac;
     
     % Calculate the temp rise
-    Rth = 16.31.*1e-3.*(Ac.*Wa).^(-0.405);
+    Rth = 16.31e-3.*(Ac.*Wa).^(-0.405);
     Tafterloss = Rth.*(Pcopper + Pcore) + 25;
 
-    % Calcualte the weight
+    % Calculate the weight
     WeightPri_copper = pi.*Pri_WireSize.^2./4.*TLp.*CopperDensity;
     WeightPri_Insu = pi.*(Pri_FullWireSize.^2 - Pri_WireSize.^2)./4.*TLp.*WireInsulationDensity;
     WeightCore_Insu = (2.*H.*(Center_L + 2*Center_T) + 4.*W.*(Center_L + 2*Center_T) + H.*(2.*Center_L + 2*Center_T)).*CoreInsulationThickness.*CoreInsulationDensity;
