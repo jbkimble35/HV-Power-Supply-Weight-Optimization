@@ -7,8 +7,6 @@ function y = Ecore_actual_EEER_xfmer_LCC(raw,raw1,raw2,raw3,raw4,raw5,raw6, ...
 % The inductor is much lower voltage since it's on the primary side, so it
 % doesn't need some of these insulation parameters.
 
-% Does Ve and its equations take into account the fact that core datasheets give halves?
-
 % Insulation
 %-------------------------------------------
 
@@ -28,7 +26,7 @@ Interlayer_Epoxy_Thickness = 0;       % m
 % GPU computing options
 %-------------------------------------------
 
-useGPU = true;
+useGPU = false;
 useSingleOnGPU = false;
 
 % Transformer parameters
@@ -40,18 +38,12 @@ etaXfmer = 0.95;
 Tmax = 100;
 % Min operating temp in Celsius
 Tmin = 25;
-% Max allowable current density in wire, (A/m^2)
-Jwmax = 500*100*100;
-% Minimal litz diameter (A/m^2)
-MinLitzDia = 0.07874e-3; % AWG40
-% Dielectric strength of insulation material (V/m) 50% derated
-dielectricstrength_insulation = 0.5 * 200e3 * 100;
 % Minimum primary windings
-MinPriWinding = 1;
+MinPriWinding = 10;
 % Maximum primary windings
-MaxPriWinding = 20;
+MaxPriWinding = 100;
 % Incremental primary winding
-IncreNp = 1;
+IncreNp = 2;
 % Maximum layer of primary winding
 MaxMlp = 1;
 % Incremental layer of primary winding
@@ -60,12 +52,12 @@ IncreMlp = 1;
 MaxMls = 10;
 % Incremental layer of secondary winding
 IncreMls = 1;
-% Minimum secondary wire diameter (m)
-MinSecWireSize = 0.4e-3;             %#ok<NASGU>
 % Max allowable transformer weight (g)
-MaxWeight = 3000;
-CoreInsulationDensity = 2.2e6;       % g/m^3 (Teflon)
-WireInsulationDensity = 2.2e6;       % g/m^3 (Teflon)
+MaxWeight = 10000;
+
+% Deratings
+%------------------------------------------
+
 % Saturation flux density derating
 BSAT_discount = 0.75;
 % Core loss multiplier
@@ -74,8 +66,6 @@ maxpackingfactor = 0.7;
 minpackingfactor = 0.01;
 % Litz copper fill
 LitzFactor = 0.75;
-% For solid core:
-SolidGate = 1.5; % factor of skindepth threshold to go from solid to litz
 
 % Electrical constants
 %-------------------------------------------
@@ -90,7 +80,16 @@ sigma = 1/rou; %#ok<NASGU>
 u0 = 4*pi*1e-7;
 % permittivity of free space F/m
 ebs10 = 8.854*1e-12; %#ok<NASGU>
-
+CoreInsulationDensity = 2.2e6;       % g/m^3 (Teflon)
+WireInsulationDensity = 2.2e6;       % g/m^3 (Teflon)
+% Minimum secondary wire diameter (m)
+MinSecWireSize = 0.4e-3;
+% Max allowable current density in wire, (A/m^2)
+Jwmax = 500*100*100;
+% Minimal litz diameter (A/m^2)
+MinLitzDia = 0.07874e-3; % AWG40
+% Dielectric strength of insulation material (V/m) 50% derated
+dielectricstrength_insulation = 0.5 * 200e3 * 100;
 
 % Body of function
 %% --------------------------------------------------------------------------------------
@@ -142,12 +141,11 @@ XCoreMU    = cell2mat(raw5(2:m1,3));
 [m1,~]    = size(raw6);
 CoreDensity   = cell2mat(raw6(2:m1,3))*1000000;
 
-Pbar = 500;      % mW/cm^3 reference level
-PFfactor = 1;
-
 % Build Steinmetz parameter sets around the target frequency
 % ----------------------------------------------
 
+Pbar = 500;      % mW/cm^3 reference level
+PFfactor = 1;
 NoMat = m1-1;
 FreqFlag    = zeros(size(1:1:NoMat));
 maxFreqPairs = floor((size(XCoreFreq,2))/2);
@@ -418,8 +416,7 @@ else
     % -------------------------------------
 
     skindepth = 1./sqrt(pi*fs*u0/rou);
-    k  = Vspeak./Vppeak;
-    Ns = round(Np.*k)+1;
+    Ns = round(Np.*(Vspeak./Vppeak))+1;
     % Primary Current
     Iprms = (Po/etaXfmer)./(Vppeak/sqrt(2));
     Ippeak = Iprms*sqrt(2);
@@ -428,29 +425,15 @@ else
     Ispeak = Isrms*sqrt(2);
     % Required copper area
 
-    % Flux and core loss
-    % -------------------------------------
-
-    lamda = Vppeak./pi./fs;
-    % Equivalent load resistor
-    Rload = Vspeak.*Vspeak./2./Po;
-    % Input power (W)
-    Pin = Po./etaXfmer;
-    % Maximum total loss allowed (W)
-    Ploss_est = Pin - Po;
-    % Window area (m)
-    Wa = H.*W;
-
     % Core weight (g)
     % -------------------------------------
     
-    densityRow = CoreDensity(matno_record);
-    Wcore = Ve.*densityRow;
+    Wcore = Ve.*CoreDensity(matno_record);
     
     % Calculate Bmax (T)
     % -------------------------------------
 
-    Bm = lamda./(2.*Np.*Ac);
+    Bm = (Vppeak./pi./fs)./(2.*Np.*Ac);
     
     % Calculate core loss (W)
     % -------------------------------------
@@ -464,33 +447,35 @@ else
     Areq_s=Isrms./Jwmax;                                % [m^2]
     
     dsolid_p=2.*sqrt(Areq_p./pi);                       % [m]
-    dsolid_s=2.*sqrt(Areq_s./pi);                       % [m]
+    dsolid_s=max(MinSecWireSize,2.*sqrt(Areq_s./pi));                       % [m]
     
-    useSolid_p=(dsolid_p<=SolidGate.*(2.*skindepth));
-    useSolid_s=(dsolid_s<=SolidGate.*(2.*skindepth));
+    useSolid_p=(dsolid_p<=2.*skindepth);
+    useSolid_s=(dsolid_s<=2.*skindepth);
     
+    MinLitzDia = MinLitzDia*ones(length(skindepth),1);
     dstrandMinlitz=max(MinLitzDia,2.*skindepth);          % [m]
     AstrandMin=pi.*(dstrandMinlitz./2).^2;                   % [m^2]
     
     % Primary
     % ----------------
-    wireInsulPriRadius = Vppeak./dielectricstrength_insulation; 
+
     Pri_Nstrands=ones(size(Iprms));
     Pri_Nstrands(~useSolid_p)=ceil(Areq_p(~useSolid_p)./AstrandMin(~useSolid_p));
+
     Pri_WireDia=dsolid_p;
     idx=~useSolid_p;
     if any(idx)
         Pri_WireDia(idx)=2.*sqrt((Pri_Nstrands(idx).*AstrandMin(idx))./(pi.*LitzFactor));
     end
-    Pri_ds=dsolid_p;                                     % effective strand dia for AC model
+    % Strand diameter
+    Pri_ds=dsolid_p;
     Pri_ds(idx)=dstrandMinlitz(idx);
-    Pri_FullWireDia = Pri_WireDia + 2.*wireInsulPriRadius;
-    A_pri_cu  = (pi.*(Pri_WireDia.^2))./4;      % m^2 per turn
-    A_pri_full= (pi.*(Pri_FullWireDia.^2))./4;  % includes jacket
+
+    Pri_FullWireDia = Pri_WireDia + 2.*Vppeak./dielectricstrength_insulation;
 
     % Secondary
     % ----------------
-    wireInsulSecRadius = Vspeak./dielectricstrength_insulation;
+
     Sec_Nstrands=ones(size(Isrms));
     Sec_Nstrands(~useSolid_s)=ceil(Areq_s(~useSolid_s)./AstrandMin(~useSolid_s));
     Sec_WireDia=dsolid_s;
@@ -498,20 +483,20 @@ else
     if any(idx)
         Sec_WireDia(idx)=2.*sqrt((Sec_Nstrands(idx).*AstrandMin(idx))./(pi.*LitzFactor));
     end
-    Sec_ds=dsolid_s;                                     % effective strand dia for AC model
+    % Strand diameter
+    Sec_ds=dsolid_s;
     Sec_ds(idx)=dstrandMinlitz(idx);
-    Sec_FullWireDia = Sec_WireDia + 2.*wireInsulSecRadius;
-    A_sec_cu  = (pi.*(Sec_WireDia.^2))./4;
-    A_sec_full= (pi.*(Sec_FullWireDia.^2))./4;
+
+    Sec_FullWireDia = Sec_WireDia + 2.*Vspeak./dielectricstrength_insulation;
     
-    CopperPacking  = (A_pri_cu.*Np + A_sec_cu.*(Ns./2))./ (Wa);
-    OverallPacking = (A_pri_full.*Np + A_sec_full.*(Ns./2))./ (Wa);
+    CopperPacking  = (((pi.*(Pri_WireDia.^2))./4).*Np + ((pi.*(Sec_WireDia.^2))./4).*(Ns./2))./ (H.*W);
+    OverallPacking = (((pi.*(Pri_FullWireDia.^2))./4).*Np + ((pi.*(Sec_FullWireDia.^2))./4).*(Ns./2))./ (H.*W);
 
     % Winding structure
     % --------------------
     
-    DS_clearance = (UsePotting).*Potting_DS+(~UsePotting).*dielectricstrength_insulation;
-    CoreInsulationThickness = CoronaMargin .* Vinsulation_max ./ DS_clearance;
+    CoreInsulationThickness = CoronaMargin .* Vinsulation_max./((UsePotting) ...
+        .*Potting_DS+(~UsePotting).*dielectricstrength_insulation);
     Pri_PerLayer=floor(Np./Mlp);
     Sec_PerLayer=floor(Ns./Mls);
     
@@ -664,7 +649,7 @@ else
     Lg = u0.*(W - Mls.*Sec_FullWireDia - Mlp.*Pri_FullWireDia).*SecH./H;
         %in Henry
     Xg = 2.*pi.*fs.*Lg;
-    R_pri = Rload./Ns.^2;
+    R_pri = (Vspeak.*Vspeak./2./Po)./Ns.^2;
     Lg_Lc_ratio = (W - 2.*CoreInsulationThickness - Mls.*Sec_FullWireDia - Mlp.* ...
         Pri_FullWireDia).*Le./ui./SecH./H;
     real_ratio = 1./(1 + Lg_Lc_ratio + Xg./R_pri);
@@ -686,8 +671,6 @@ else
         Mlp_g     = toGPU(Mlp);
         Mls_g     = toGPU(Mls);
         rou_s     = toScalar(rou);
-        Apri_g = toGPU(A_pri_cu);
-        Asec_g = toGPU(A_sec_cu);
     
         % --- Dowell AC resistance ---
         Rdc_p_g = rou_s .* TLp_g ./ (PriN_g .* (pi.*(dsPri_g.^2)./4));
@@ -737,7 +720,7 @@ else
     % Calculate temperature rise
     %----------------------------------------------------------------
 
-    Rth    = 16.31e-3 .* (Ac .* Wa) .^ (-0.405);   % K/W
+    Rth    = 16.31e-3 .* (Ac .* H.*W) .^ (-0.405);   % K/W
     Tafterloss = Rth .* (Pcopper + Pcore) + 25;          % °C
 
     % Weight of core insulation
@@ -792,6 +775,7 @@ else
    
     % Wire weights
     %---------------------------------------------
+
     WeightPri_copper = (pi.*Pri_WireDia.^2./4).*TLp.* CopperDensity;
     WeightPri_Insu = (pi.*(Pri_FullWireDia.^2 - Pri_WireDia.^2)./4).*TLp.*WireInsulationDensity;
     WeightSec_copper = (pi.*Sec_WireDia.^2./4).*TLs.*CopperDensity;
@@ -809,7 +793,7 @@ else
     B_index = find(Bm < BSAT*BSAT_discount);
 
     % Filter by Temperature
-    P_loss_index = find(Pcopper + Pcore <= Ploss_est);
+    P_loss_index = find(Pcopper + Pcore <= Po./etaXfmer - Po);
     Tafterloss_index = find(Tafterloss <= Tmax);
     Tmin_index = find(Tafterloss >= Tmin);
 
