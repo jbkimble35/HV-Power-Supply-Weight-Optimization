@@ -70,21 +70,20 @@ Date = '9_22_25';
 % Quality factor
 Q_range = 0.5:0.1:1.5;
 % Resonant frequency
-f0_range = 20000;
+f0_range = 500000;
 % Capacitance ratio
-A_range = 0.1:0.1:1;
+A_range = 0.05:0.05:0.3;
 % Turns ratio
-K_range = 19:1:21;
-% DC input voltage range
-% Doesn't work with arrays for some reason.
+K_range = 20;
+% DC input voltage range (unipolar peak) (if Vppeak is the param. to select around,
+% keep GT ~1, but optimal weight is usually achieved with tank gain of ~2)
 Vin_range = 500;
 % Peak amplitude of the output voltage that one hope to achieve (V)
-% Doesn't work with arrays for some reason.
 Vo_range = 10000;
 % Output power desired (W)
-Po_range = 200;
+Po_range = 1000;
 % frequency of the transformer
-fs_range = 20000;
+fs_range = 500000;
 
 % Winding Pattern index: 1 indicates center leg winding, 2 indicates double
 Winding_Pattern = 2;
@@ -181,13 +180,14 @@ GT = GT(KeepIndex);
 Imax = Imax(KeepIndex);
 
 % Loops over every row of the 4-D grid, with tic-toc measuring total
-% runtime. 
+% runtime.
+pcnt = 0.1;
 tic
 for i = 1:length(Q)
     
-    % Voltage applied to primary from the input and resonant tank gain.
+    % Peak voltage applied to primary from the input and resonant tank gain.
     Vpri = Vin_range.*GT(i);
-    % Output voltage on the transformer after turn ratio K
+    % Peak output voltage on the transformer after turn ratio K
     Vsec = Vin_range.*GT(i).*K(i);
     % Maximum insulation stress
     Vinsulation_max = Vsec;
@@ -215,6 +215,11 @@ for i = 1:length(Q)
     ResultL(i,:) = SuceedL;
     % Sliced variables in parallel loops allow this ResultX and ResultL to exist outside the
     % parfor loop.
+
+    if i>=pcnt*length(Q)
+        pcnt=pcnt+0.1;
+        fprintf("%d Percent Complete \n",round(i*100/length(Q)));
+    end
 end
 toc
 
@@ -230,11 +235,19 @@ XfmerDesignTable = array2table(ResultX,'VariableNames',{'Po_W','Vppeak_V',...
     'WeightPri_Insu_g', 'WeightSec_copper_g', 'WeightSec_Insu_g', 'WeightCore_Insu_g',...
     'TotalWeight_g', 'TempAbsolute_C','CoreIndex','Volume_m^3'});
 % Deletes rows of zeros, and then sorts by weight
-A = table2array(XfmerDesignTable);
-XfmerDesignTable = XfmerDesignTable(~all(A == 0, 2), :);
+arrX = table2array(XfmerDesignTable);
+XfmerDesignTable = XfmerDesignTable(~all(arrX == 0, 2), :);
 XfmerDesignTable = sortrows(XfmerDesignTable,"TotalWeight_g","ascend");
 % Results are written to excel file and sheet
+
+xcelX = readcell(filename_xfmer,'Sheet',ResultDatasheetname);
+[row,col] = size(xcelX);
+writecell(repmat({''},row,col),filename_xfmer,'Sheet',ResultDatasheetname);
 writetable(XfmerDesignTable,filename_xfmer,'Sheet',ResultDatasheetname);
+
+Xfinal = readcell(filename_xfmer,'Sheet',ResultDatasheetname);
+weightX = Xfinal{2,41};
+fprintf("Transformer Weight is %.2f g",weightX);
 
 % Results for inductor and the column names are passed here.
 InductorDesignTable = array2table(ResultL,'VariableNames',{'PoW','Vin_V',...
@@ -247,14 +260,16 @@ InductorDesignTable = array2table(ResultL,'VariableNames',{'PoW','Vin_V',...
     'WeightCore_Insu_g','TotalWeight_g','TempAbsolute_C','L', 'airgap_m', 'CoreIndex',...
     'Q','f0', 'A', 'K', 'RT', 'Ls', 'Cs', 'Cp', 'GT','Volume_m^3'});
 % Deletes rows of zeros, and then sorts by weight
-A = table2array(InductorDesignTable);
-InductorDesignTable = InductorDesignTable(~all(A == 0, 2), :);
+arrL = table2array(InductorDesignTable);
+InductorDesignTable = InductorDesignTable(~all(arrL == 0, 2), :);
 InductorDesignTable = sortrows(InductorDesignTable,"TotalWeight_g","ascend");
 % Results are written to excel file and sheet
+
+xcelL = readcell(filename_inductor,'Sheet',ResultDatasheetname);
+[row,col] = size(xcelL);
+writecell(repmat({''},row,col),filename_inductor,'Sheet',ResultDatasheetname);
 writetable(InductorDesignTable,filename_inductor,'Sheet',ResultDatasheetname);
 
-% Minimum weights for each design is printed in the chat.
-weightX = ResultX(1,41);
-fprintf("Transformer Weight is %.2f g",weightX);
-weightL = ResultL(1,29);
+Lfinal = readcell(filename_inductor,'Sheet',ResultDatasheetname);
+weightL = Lfinal{2,29};
 fprintf("Inductor Weight is %.2f g",weightL);
