@@ -43,7 +43,7 @@ Tmax = 100;
 % Min allowable temperature (C)
 Tmin = 25;
 % Maximum allowable weight (g)
-MaxWeight = 2000;
+MaxWeight = 3000;
 % Air gap (m)
 mingap = 2e-4;
 
@@ -53,11 +53,11 @@ mingap = 2e-4;
 % Minimum turns
 MinWinding = 1;
 % Maximum turns
-MaxWinding = 100;
+MaxWinding = 50;
 % Incremental winding
 IncreN = 1;
 % Maximum layer of winding
-MaxMl = 20;
+MaxMl = 5;
 % Incremental layers. The layers of a transformer reference each wrap of
 % turns that fills the window height before moving on to the next level.
 % Once one layer fills, the next layer is wound on top, seperated by an
@@ -334,7 +334,7 @@ KeepIndex = intersect(KeepIndex, L_index);
 % Debug
 if isempty(KeepIndex)
     warning('No Successful Indexes');
-    y = Design_inductor;
+    y = zeros(1,43);
     return;
 end
 
