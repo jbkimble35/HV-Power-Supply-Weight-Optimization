@@ -68,23 +68,23 @@ raw = readcell('CoreSizeData.xlsx','Sheet','Ecore');
 
 Date = '9_22_25';
 % Quality factor
-Q_range = 1:0.1:2;
+Q_range = 0.1:0.1:2;
 % Resonant frequency
-f0_range = 500000;
+f0_range = 10000;
 % Capacitance ratio
 A_range = 0.1:0.1:1;
 % Turns ratio
-K_range = 15;
+K_range = 35:1:45;
 % DC input voltage range
 % Doesn't work with arrays for some reason.
-Vin_range = 200;
+Vin_range = 100;
 % Peak amplitude of the output voltage that one hope to achieve (V)
 % Doesn't work with arrays for some reason.
-Vo_range = 7500;
+Vo_range = 4000;
 % Output power desired (W)
-Po_range = 750;
+Po_range = 200;
 % frequency of the transformer
-fs_range = 500000;
+fs_range = 10000;
 
 % Winding Pattern index: 1 indicates center leg winding, 2 indicates double
 Winding_Pattern = 2;
