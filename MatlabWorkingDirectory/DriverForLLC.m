@@ -68,23 +68,23 @@ raw = readcell('CoreSizeData.xlsx','Sheet','Ecore');
 
 Date = '9_22_25';
 % Quality factor
-Q_range = 0.1:0.1:2;
+Q_range = 0.5:0.1:1.5;
 % Resonant frequency
-f0_range = 10000;
+f0_range = 20000;
 % Capacitance ratio
 A_range = 0.1:0.1:1;
 % Turns ratio
-K_range = 35:1:45;
+K_range = 19:1:21;
 % DC input voltage range
 % Doesn't work with arrays for some reason.
-Vin_range = 100;
+Vin_range = 500;
 % Peak amplitude of the output voltage that one hope to achieve (V)
 % Doesn't work with arrays for some reason.
-Vo_range = 4000;
+Vo_range = 10000;
 % Output power desired (W)
 Po_range = 200;
 % frequency of the transformer
-fs_range = 10000;
+fs_range = 20000;
 
 % Winding Pattern index: 1 indicates center leg winding, 2 indicates double
 Winding_Pattern = 2;
@@ -245,7 +245,7 @@ InductorDesignTable = array2table(ResultL,'VariableNames',{'PoW','Vin_V',...
     'CopperPackingFactor', 'PackingFactor','LossCore_W',...
     'LossCopper_W','WeightCore_g', 'WeightPri_copper_g','WeightPri_Insu_g',...
     'WeightCore_Insu_g','TotalWeight_g','TempAbsolute_C','L', 'airgap_m', 'CoreIndex',...
-    'Q','f0','A', 'K', 'RT', 'Ls', 'Cs', 'Cp', 'GT','Volume_m^3'});
+    'Q','f0', 'A', 'K', 'RT', 'Ls', 'Cs', 'Cp', 'GT','Volume_m^3'});
 % Deletes rows of zeros, and then sorts by weight
 A = table2array(InductorDesignTable);
 InductorDesignTable = InductorDesignTable(~all(A == 0, 2), :);
