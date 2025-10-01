@@ -53,33 +53,6 @@ Transformer:
 % If your variables are too restrictive for your data, you will get
 % a table with no values, as no set of variables match your requirements
 
-%% Data Format for Size and Loss:
-
-% Need to obtain data for the cores desired to analyze.
-% You need to collect geometry and size data, as well as
-% material-specific data.
-
-% LossData:
-
-% For material: You need flux density and power loss
-% at discrete known frequencies,
-% saturation flux density, and permittivity.
-% Freq is in Hz, Bfield is in T, Ploss is in mW/cm^3,
-% BSAT is in T, MU is in H/m
-
-% Freq: at least one frequency must be within 40% of operating freq.
-% frequency is in pairs of values. cols in Pairs of freq. per material
-% Bfield: exactly 2 B points per freq. This is by design, so choose 2
-% points close to your intended operating point or just in the middle of
-% the CL loss data to avoid the low and high ranges, and it should be more
-% accurate than any regression fit with more points (in theory)
-% Ploss: 2 loss values corresponding to B values, in mW/cm3
-% BSAT: design derates to 0.75 of value. Put one value in C per material
-% MU: material mu_r in column C
-% core loss data provided in the manufacturer's datasheet 
-
-% Large Dataset (Memory Issues with PC)
-
 corelossfile = 'CoreLossData.xlsx';
 raw1 = readcell('CoreLossData.xlsx','Sheet','Freq');
 raw2 = readcell('CoreLossData.xlsx','Sheet','Bfield');
@@ -88,48 +61,30 @@ raw4 = readcell('CoreLossData.xlsx','Sheet','BSAT');
 raw5 = readcell('CoreLossData.xlsx','Sheet','MU');
 raw6 = readcell('CoreLossData.xlsx','Sheet','Density');
 
-% SizeData:
-
-% For geometry: You need geometries with known dimensions
-% You need core effective length Le (mm), 
-% core window area height and width (mm^2),
-% core volume (mm^3) as Le*Ac,
-% need to differentiate between core geometries in the xlsx file,
-% center leg and side leg area (still need to make standardized format
-% for the excel file to be named accordingly to ER,EE,U,UR, etc.
-
-% Ecore sheet from data in thesis, plus a column for core shape choice,
-% with 1 = EE, 2 = ER, 3 = U, 4 = UR, but U and UR aren't included yet.
-% Columns go as follows:
-% [rowNumber,coreName,Ve,Ae,Le,coreShapeIndex,empty,priWindingWidth,
-% priWindingHeight,secWindingWidth,secWindingHeight,coreWindowWidth,
-% coreWindowHeight]
-% all units are mm, or mm^2, or mm^3
-
 coresizefile = 'CoreSizeData.xlsx';
 raw = readcell('CoreSizeData.xlsx','Sheet','Ecore');
 
 %% Parameters to Adjust
 
-Date = 'xxx';
+Date = '9_22_25';
 % Quality factor
-Q_range = 0.1:0.1:5;
+Q_range = 1:0.1:2;
 % Resonant frequency
-f0_range = 4100;
+f0_range = 500000;
 % Capacitance ratio
-A_range = 0.1:0.1:5;
+A_range = 0.1:0.1:1;
 % Turns ratio
-K_range = 35:1:40;
+K_range = 15;
 % DC input voltage range
 % Doesn't work with arrays for some reason.
-Vin_range = 800;
+Vin_range = 200;
 % Peak amplitude of the output voltage that one hope to achieve (V)
 % Doesn't work with arrays for some reason.
-Vo_range = 30000;
+Vo_range = 7500;
 % Output power desired (W)
-Po_range = 100;
+Po_range = 750;
 % frequency of the transformer
-fs_range = 4000;
+fs_range = 500000;
 
 % Winding Pattern index: 1 indicates center leg winding, 2 indicates double
 Winding_Pattern = 2;
@@ -141,8 +96,8 @@ Notes ='';
 %% File Output
 
 % File output configuration
-filename_xfmer = strcat(Date,'_','TestXfmer.xlsx');
-filename_inductor = strcat(Date,'_','TestInductor.xlsx');
+filename_xfmer = strcat(Date,'_','Xfmer.xlsx');
+filename_inductor = strcat(Date,'_','Inductor.xlsx');
 SheetNumber = 1;
 Infosheetname = strcat('SimInfo', num2str(SheetNumber));
 ResultDatasheetname = strcat('ResultsData', num2str(SheetNumber));
@@ -262,7 +217,6 @@ for i = 1:length(Q)
     % parfor loop.
 end
 toc
-
 
 % Results for transformer and the column names are passed here.
 XfmerDesignTable = array2table(ResultX,'VariableNames',{'Po_W','Vppeak_V',...
