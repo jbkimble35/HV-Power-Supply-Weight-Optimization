@@ -41,4 +41,37 @@ This is a script modified from the 2020 thesis by Yiou He: "Towards High Voltage
 ## Future Work:
 - Import Voltage Multiplier weight scripts
 
+## Data formatting:
+
+You need to collect geometry and size data, as well as material-specific data.
+
+### SizeData:
+
+For geometry: You need geometries with known dimensions
+You need:
+- Core effective length Le (mm)
+- Core window area height and width (mm^2)
+- Core volume (mm^3) as Le*Ac
+- Center leg and Side leg area
+
+All units are mm, or mm^2, or mm^3
+
+- Columns go as follows:
+
+rowNumber, coreName, Ve, Ae, Le, coreShapeIndex, empty, priWindingWidth, priWindingHeight, secWindingWidth, secWindingHeight, coreWindowWidth, coreWindowHeight
+
+### LossData:
+
+For material: You need flux density and power loss at discrete known frequencies, saturation flux density, and permittivity.
+Freq is in Hz, Bfield is in T, Ploss is in mW/cm^3, BSAT is in T, MU is in H/m
+
+- Freq: at least one frequency must be within 40% of operating freq. Frequency is in pairs of values. cols in pairs of 2 freq. per material
+- Bfield: exactly 2 B points per freq. This is by design, so choose 2 points close to your intended operating point or just in the middle of the CL loss data to avoid the low and high ranges, and it should be more accurate than any regression fit with more points (in theory)
+- Ploss: 2 loss values corresponding to B values, in mW/cm3
+- BSAT: design derates to 0.75 of value. Put one value in C per material
+- MU: material mu_r in column C
+- 
+Core loss data in CL provided in manufacturer datasheets 
+
+
 
