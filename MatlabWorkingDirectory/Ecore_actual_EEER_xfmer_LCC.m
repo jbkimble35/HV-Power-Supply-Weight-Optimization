@@ -49,11 +49,11 @@ dielectricstrength_insulation = 0.5 * 200e3 * 100;
 % Minimum primary windings
 MinPriWinding = 1;
 % Maximum primary windings
-MaxPriWinding = 40;
+MaxPriWinding = 20;
 % Incremental primary winding
 IncreNp = 1;
 % Maximum layer of primary winding
-MaxMlp = 5;
+MaxMlp = 1;
 % Incremental layer of primary winding
 IncreMlp = 1;
 % Maximum layer of secondary winding
@@ -63,7 +63,7 @@ IncreMls = 1;
 % Minimum secondary wire diameter (m)
 MinSecWireSize = 0.4e-3;             %#ok<NASGU>
 % Max allowable transformer weight (g)
-MaxWeight = 5000;
+MaxWeight = 3000;
 CoreInsulationDensity = 2.2e6;       % g/m^3 (Teflon)
 WireInsulationDensity = 2.2e6;       % g/m^3 (Teflon)
 % Saturation flux density derating
@@ -487,7 +487,7 @@ else
     Pri_FullWireDia = Pri_WireDia + 2.*wireInsulPriRadius;
     A_pri_cu  = (pi.*(Pri_WireDia.^2))./4;      % m^2 per turn
     A_pri_full= (pi.*(Pri_FullWireDia.^2))./4;  % includes jacket
-    
+
     % Secondary
     % ----------------
     wireInsulSecRadius = Vspeak./dielectricstrength_insulation;
