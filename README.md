@@ -17,12 +17,8 @@ This is a script modified from the 2020 thesis by Yiou He: "Towards High Voltage
 -  Make the RTC script match the inductor and transformer design script so that every iteration of the loop writes to a row of the final design instead of to a global variable.
 -  General fixes need to be performed on the RTC script to get it working.
 -  Need to ensure realism of inductor data through cross-checking with more of the thesis results. Transformer comparison has already been done and is in the comparison .xlsx file.
--  Need to check Ns4 to make sure it's not vital for operation of the script, since it's not being used in the function that it calls on the GPU.
 -  Need to replace core insulation thickness with a new value, need to take into account the epoxy between wires in each layer and between layers, need to include secondary layer stress and interlayer tape, need to filter designs by their volts-per-layer.
-- I need to edit the inductor script to solve some of the same issues I solved in the transformer one, i.e. maybe adding a GPU option and solid core vs. litz wire option
-- Transformer script is underestimating the weight by ~10x, need to understand why or revert to before potting was added since the potting and tape weight aren't added
-
-- AC Dowell resistance is too high for primary (and also likely secondary) and cancelling all candidate designs. I need to recheck the GPU and CPU code sections to make sure they match with the definition of AC Dowell resistance, numstrands, etc.
+-  A big issue is that between results, I need to change ranges like the max layers, increment Q factor, etc. not because they are important parameters for me, but because I can't have them too high due to memory limitations and I can't have them too low to risk missing designs.
 
 ## Recent changes:
 - Added GPU computing options for this transformer script, but the old CPU options also work
