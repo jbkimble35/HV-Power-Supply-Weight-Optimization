@@ -10,18 +10,8 @@ function y = Ecore_actual_EEER_xfmer_LCC(raw,raw1,raw2,raw3,raw4,raw5,raw6, ...
 % Insulation
 %-------------------------------------------
 
-% Potting spec.s
-UsePotting      = false;
-Potting_DS      = 20e6;      % V/m
-CoronaMargin    = 2.0;       % Breakdown voltage safety factor
+% Put interlayer tape and potting here
 
-% Interlayer tape (e.g., Kapton)
-Tape_Interlayer_Thickness = 50e-6;    % m, per ply
-Tape_Interlayer_DS        = 200e6;    % V/m, (≈200 kV/mm for Kapton)
-Tape_Interlayer_Wraps     = 1;
-
-% Thickness of epoxy between layers
-Interlayer_Epoxy_Thickness = 0;       % m
 
 % GPU computing options
 %-------------------------------------------
@@ -33,19 +23,19 @@ useSingleOnGPU = false;
 %-------------------------------------------
 
 % Minimum transformer efficiency
-etaXfmer = 0.95;
+etaXfmer = 0.8;
 % Max operating temp in Celsius
 Tmax = 100;
 % Min operating temp in Celsius
 Tmin = 25;
 % Minimum primary windings
-MinPriWinding = 10;
+MinPriWinding = 1;
 % Maximum primary windings
-MaxPriWinding = 100;
+MaxPriWinding = 200;
 % Incremental primary winding
-IncreNp = 2;
+IncreNp = 1;
 % Maximum layer of primary winding
-MaxMlp = 1;
+MaxMlp = 10;
 % Incremental layer of primary winding
 IncreMlp = 1;
 % Maximum layer of secondary winding
@@ -62,7 +52,7 @@ MaxWeight = 10000;
 BSAT_discount = 0.75;
 % Core loss multiplier
 CoreLossMultiple = 1.5;
-maxpackingfactor = 0.7;
+maxpackingfactor = 0.9;
 minpackingfactor = 0.01;
 % Litz copper fill
 LitzFactor = 0.75;
@@ -74,12 +64,8 @@ LitzFactor = 0.75;
 CopperDensity = 8.96e6;
 % ohm*m, resistivity of copper at 100C
 rou = 2.3e-8;
-% conductivity of copper, inverse of rou
-sigma = 1/rou; %#ok<NASGU>
 % permittivity of free space HA/m^2
 u0 = 4*pi*1e-7;
-% permittivity of free space F/m
-ebs10 = 8.854*1e-12; %#ok<NASGU>
 CoreInsulationDensity = 2.2e6;       % g/m^3 (Teflon)
 WireInsulationDensity = 2.2e6;       % g/m^3 (Teflon)
 % Minimum secondary wire diameter (m)
@@ -174,8 +160,6 @@ for i = 1:1:NoMat
         F_atPv_500(i,j) = DataSheetFreq(2*j-1); % in Hz
         PF_atPv_500(i,j) = B_atPv_500(i,j)*F_atPv_500(i,j)^PFfactor;
 
-        % For ./, it works, it just uses this to account for if frequency is a
-        % sweeped variable i.e. an array.
         if (abs(fs_range - F_atPv_500(i,j))/fs_range <= 0.4)
             FreqFlag(i) = 1;
         end
@@ -495,29 +479,9 @@ else
     % Winding structure
     % --------------------
     
-    CoreInsulationThickness = CoronaMargin .* Vinsulation_max./((UsePotting) ...
-        .*Potting_DS+(~UsePotting).*dielectricstrength_insulation);
+    CoreInsulationThickness = Vinsulation_max./dielectricstrength_insulation;
     Pri_PerLayer=floor(Np./Mlp);
     Sec_PerLayer=floor(Ns./Mls);
-    
-    % Interlayer param.s
-    % ---------------------
-    
-    % Effective radial build added between adjacent secondary layers (geometry)
-    t_interlayer_radial = Tape_Interlayer_Wraps .* Tape_Interlayer_Thickness ...
-                    + (UsePotting .* Interlayer_Epoxy_Thickness);
-
-    % Breakdown voltage capability of the tape + epoxy, derated
-    Vbreak_interlayer = (Tape_Interlayer_Wraps .* Tape_Interlayer_Thickness .* Tape_Interlayer_DS) ...
-                      + (UsePotting .* Interlayer_Epoxy_Thickness .* Potting_DS);
-    Vbreak_interlayer = Vbreak_interlayer ./ CoronaMargin;
-
-    % Estimated volts per layer
-    V_per_layer_est = Vspeak ./ max(Mls,1);
-    
-    % Pass/fail index for interlayer stress
-    Interlayer_index = find(V_per_layer_est <= Vbreak_interlayer);
-
 
     % Computes mean length of turn for pri and sec, accounting for geometry
     % and winding pattern
@@ -538,12 +502,11 @@ else
         priFull_g  = toGPU(Pri_FullWireDia);
         secFull_g  = toGPU(Sec_FullWireDia);
         wp_scalar  = toScalar(int32(Winding_Pattern));
-        tinter_g = toGPU(t_interlayer_radial);
     
         % Element-wise compute for each candidate
         [TLp_g, TLs_g] = arrayfun(@computeTL_one,...
             shape_g, np_g, ns_g, priW_g, priH_g, secW_g, secH_g, ...
-            tcore_g, mlp_g, mls_g, priFull_g, secFull_g, tinter_g, ...
+            tcore_g, mlp_g, mls_g, priFull_g, secFull_g, ...
             wp_scalar);
     
         TLp = toHost(TLp_g);
@@ -562,7 +525,6 @@ else
                 % Secondary turns per layer
                 Sec_PerLayer = floor(Ns./Mls);
     
-                % Secondary group counts (per your table)
                 Ns_group1 = floor((H - 2.*CoreInsulationThickness)./Sec_FullWireDia);
                 Ns_group2 = zeros(size(Ns_group1));
                 Ns_group3 = zeros(size(Ns_group1));
@@ -575,28 +537,28 @@ else
                     PriW(isEE) + PriH(isEE) + 4.*CoreInsulationThickness(isEE) + 2.*Mlp(isEE).*Pri_FullWireDia(isEE));
                 TLs(isEE) = Ns(isEE).*2.*( ...
                     PriW(isEE) + PriH(isEE) + 4.*Mlp(isEE).*Pri_FullWireDia(isEE) + 8.*CoreInsulationThickness(isEE) ...
-                    + 2.*( Mls(isEE).*Sec_FullWireDia(isEE) + max(Mls(isEE)-1,0).*t_interlayer_radial ) );
+                    + 2.*(Mls(isEE).*Sec_FullWireDia(isEE)));
     
                 % ER center
                 TLp(isER) = 2.*pi.*Np(isER).*( ...
                     PriW(isER)./2 + CoreInsulationThickness(isER) + 0.5.*Mlp(isER).*Pri_FullWireDia(isER));
                 TLs(isER) = 2.*pi.*Ns(isER).*( ...
                     PriW(isER)./2 + Mlp(isER).*Pri_FullWireDia(isER) + 2.*CoreInsulationThickness(isER) ...
-                    + 0.5.*( Mls(isER).*Sec_FullWireDia(isER) + max(Mls(isER)-1,0).*t_interlayer_radial ) );
+                    + 0.5.*(Mls(isER).*Sec_FullWireDia(isER)));
     
                 % U center
                 TLp(isU) = 2.*Np(isU).*( ...
                     PriW(isU) + PriH(isU) + 4.*CoreInsulationThickness(isU) + 2.*Mlp(isU).*Pri_FullWireDia(isU));
-                TLs(isU) = 2.*Ns(isU).*( ...
+                TLs(isU) = 2.*Ns(isU).*(...
                     PriW(isU) + PriH(isU) + 4.*CoreInsulationThickness(isU) ...
-                    + 2.*( Mls(isU).*Sec_FullWireDia(isU) + max(Mls(isU)-1,0).*t_interlayer_radial ) );
+                    + 2.*(Mls(isU).*Sec_FullWireDia(isU)));
     
                 % UR center
                 TLp(isUR) = 2.*pi.*Np(isUR).*( ...
                     PriW(isUR)./2 + CoreInsulationThickness(isUR) + 0.5.*Mlp(isUR).*Pri_FullWireDia(isUR));
                 TLs(isUR) = 2.*pi.*Ns(isUR).*( ...
                     PriW(isUR)./2 + CoreInsulationThickness(isUR) ...
-                    + 0.5.*( Mls(isUR).*Sec_FullWireDia(isUR) + max(Mls(isUR)-1,0).*t_interlayer_radial ) );
+                    + 0.5.*(Mls(isUR).*Sec_FullWireDia(isUR)));
     
             case 2 % -------- double leg --------
                 % Only consider half because symmetric
@@ -615,28 +577,28 @@ else
                     PriW(isEE) + PriH(isEE) + 4.*CoreInsulationThickness(isEE) + 2.*Mlp(isEE).*Pri_FullWireDia(isEE));
                 TLs(isEE) = Ns(isEE).*2.*( ...
                     SecW(isEE) + SecH(isEE) + 4.*CoreInsulationThickness(isEE) ...
-                    + 2.*( Mls(isEE).*Sec_FullWireDia(isEE) + max(Mls(isEE)-1,0).*t_interlayer_radial ) );
+                    + 2.*(Mls(isEE).*Sec_FullWireDia(isEE)));
     
                 % ER double
                 TLp(isER) = 2.*pi.*Np(isER).*( ...
                     PriW(isER)./2 + CoreInsulationThickness(isER) + 0.5.*Mlp(isER).*Pri_FullWireDia(isER));
                 TLs(isER) = 2.*pi.*Ns(isER).*( ...
                     sqrt(2).*PriW(isER)./2 + CoreInsulationThickness(isER) ...
-                    + 0.5.*( Mls(isER).*Sec_FullWireDia(isER) + max(Mls(isER)-1,0).*t_interlayer_radial ) );
+                    + 0.5.*(Mls(isER).*Sec_FullWireDia(isER)));
     
                 % U double
                 TLp(isU) = 2.*Np(isU).*( ...
                     PriW(isU) + PriH(isU) + 4.*CoreInsulationThickness(isU) + 2.*Mlp(isU).*Pri_FullWireDia(isU));
                 TLs(isU) = 2.*Ns(isU).*( ...
                     PriW(isU) + PriH(isU) + 4.*CoreInsulationThickness(isU) ...
-                    + 2.*( Mls(isU).*Sec_FullWireDia(isU) + max(Mls(isU)-1,0).*t_interlayer_radial ) );
+                    + 2.*(Mls(isU).*Sec_FullWireDia(isU)));
     
                 % UR double
                 TLp(isUR) = 2.*pi.*Np(isUR).*( ...
                     PriW(isUR)./2 + CoreInsulationThickness(isUR) + 0.5.*Mlp(isUR).*Pri_FullWireDia(isUR));
                 TLs(isUR) = 2.*pi.*Ns(isUR).*( ...
                     PriW(isUR)./2 + CoreInsulationThickness(isUR) ...
-                    + 0.5.*( Mls(isUR).*Sec_FullWireDia(isUR) + max(Mls(isUR)-1,0).*t_interlayer_radial ) );
+                    + 0.5.*(Mls(isUR).*Sec_FullWireDia(isUR)));
     
             otherwise
                 warning('Wrong winding pattern');
@@ -851,7 +813,7 @@ else
         ok_g = arrayfun(@windowOk_one, shape_g, wp_s, ...
             PriPer_g, PriFull_g, SecPer_g, SecFull_g, ...
             Mlp_g, Mls_g, Ns1_g, Ns2_g, Ns3_g, Ns4_g, ...
-            H_g, W_g, Tcore_g,tinter_g, SupposeNs_g, Ns_g);
+            H_g, W_g, Tcore_g, SupposeNs_g, Ns_g);
     
         WindowFit_index = find(toHost(ok_g));
 
@@ -878,7 +840,7 @@ else
                 (Sec_PerLayer.*Sec_FullWireDia <= H - 2.*CoreInsulationThickness);
         
             EEER_center_width_ok = is_EE_or_ER_core & ...
-                (Mlp.*Pri_FullWireDia + (Mls.*Sec_FullWireDia + max(Mls-1,0).*t_interlayer_radial) ...
+                (Mlp.*Pri_FullWireDia + (Mls.*Sec_FullWireDia) ...
                  <= W - 3.*CoreInsulationThickness);
         
             meetsWindowFitConstraints = meetsWindowFitConstraints | ...
@@ -913,15 +875,14 @@ else
         
         % Width #2: Mls*SecFull + Ns2*SecFull <= W - 2*TcoreInsu
         UUR_width2_ok = is_U_or_UR_core & ...
-            ((Mls.*Sec_FullWireDia + max(Mls-1,0).*t_interlayer_radial) + Ns_group2.*Sec_FullWireDia ...
+            (Mls.*Sec_FullWireDia + Ns_group2.*Sec_FullWireDia ...
             <= W - 2.*CoreInsulationThickness);
         
         meetsWindowFitConstraints = meetsWindowFitConstraints | ...
             (UUR_height_ok & UUR_width1_ok & UUR_width2_ok);
         
         % Also require that the chosen layer/row plan can realize Ns overall
-        hasEnoughSecondaryPositions = (SupposeNs >= Ns);
-        meetsWindowFitConstraints = meetsWindowFitConstraints & hasEnoughSecondaryPositions;
+        meetsWindowFitConstraints = meetsWindowFitConstraints & (SupposeNs >= Ns);
         
         % Export indices used downstream
         WindowFit_index = find(meetsWindowFitConstraints);
@@ -935,7 +896,6 @@ else
     Index_Meet_All = intersect(B_index,P_loss_index);
     Index_Meet_All = intersect(Index_Meet_All,Tafterloss_index);
     Index_Meet_All = intersect(Index_Meet_All,Tmin_index);
-    Index_Meet_All = intersect(Index_Meet_All,Interlayer_index);
     Index_Meet_All = intersect(Index_Meet_All,TotalWeight_index);
     Index_Meet_All = intersect(Index_Meet_All,OverallPackingmin_index);
     Index_Meet_All = intersect(Index_Meet_All,OverallPackingmax_index);
@@ -1012,7 +972,7 @@ end
 %%----------------------------------------------------------------------------------------------------
 
 % ---------- TLp/TLs ----------
-function [tLp,tLs] = computeTL_one(shape,np,ns,priW,priH,secW,secH,tcore,mlp,mls,priFull,secFull,tinter,wp)
+function [tLp,tLs] = computeTL_one(shape,np,ns,priW,priH,secW,secH,tcore,mlp,mls,priFull,secFull,wp)
 % shape: 1=EE, 2=ER, 3=U, 4=UR; wp: 1=center-leg, 2=double-leg
 % tinter: interlayer radial thickness per gap
 
@@ -1020,38 +980,38 @@ function [tLp,tLs] = computeTL_one(shape,np,ns,priW,priH,secW,secH,tcore,mlp,mls
         % -------- Center-leg --------
         if shape==1   % EE rectangular window
             tLp = np*2*(priW+priH+4*tcore+2*mlp*priFull);
-            % add 2*(mls*secFull + (mls-1)*tinter) for radial
+            % add 2*(mls*secFull) for radial
             tLs = ns*2*(priW+priH+4*mlp*priFull+8*tcore ...
-                 + 2*( mls*secFull + max(mls-1,0)*tinter ));
+                 + 2*( mls*secFull));
         elseif shape==2 % ER circular
             tLp = 2*pi*np*(priW/2 + tcore + 0.5*mlp*priFull);
             tLs = 2*pi*ns*(priW/2 + mlp*priFull + 2*tcore ...
-                 + 0.5*(mls*secFull + max(mls-1,0)*tinter));
+                 + 0.5*(mls*secFull));
         elseif shape==3 % U rectangular (center)
             tLp = 2*np*(priW+priH+4*tcore+2*mlp*priFull);
             tLs = 2*ns*(priW+priH+4*tcore ...
-                 + 2*(mls*secFull + max(mls-1,0)*tinter));
+                 + 2*(mls*secFull));
         else            % UR circular (center)
             tLp = 2*pi*np*(priW/2 + tcore + 0.5*mlp*priFull);
-            tLs = 2*pi*ns*(priW/2 + tcore + 0.5*(mls*secFull + max(mls-1,0)*tinter));
+            tLs = 2*pi*ns*(priW/2 + tcore + 0.5*(mls*secFull));
         end
     else
         % -------- Double-leg --------
         if shape==1   % EE rectangular (double)
             tLp = np*2*(priW+priH+4*tcore+2*mlp*priFull);
             tLs = ns*2*(secW+secH+4*tcore ...
-                 + 2*(mls*secFull + max(mls-1,0)*tinter));
+                 + 2*(mls*secFull));
         elseif shape==2 % ER circular (double)
             tLp = 2*pi*np*(priW/2 + tcore + 0.5*mlp*priFull);
             tLs = 2*pi*ns*(sqrt(2)*priW/2 + tcore ...
-                 + 0.5*(mls*secFull + max(mls-1,0)*tinter));
+                 + 0.5*(mls*secFull));
         elseif shape==3 % U rectangular (double)
             tLp = 2*np*(priW+priH+4*tcore+2*mlp*priFull);
             tLs = 2*ns*(priW+priH+4*tcore ...
-                 + 2*(mls*secFull + max(mls-1,0)*tinter));
+                 + 2*(mls*secFull));
         else            % UR circular (double)
             tLp = 2*pi*np*(priW/2 + tcore + 0.5*mlp*priFull);
-            tLs = 2*pi*ns*(priW/2 + tcore + 0.5*(mls*secFull + max(mls-1,0)*tinter));
+            tLs = 2*pi*ns*(priW/2 + tcore + 0.5*mls*secFull);
         end
     end
 end
@@ -1073,28 +1033,28 @@ end
 
 % ---------- window-fit ----------
 function ok = windowOk_one(shape,wp, PriPer, PriFull, SecPer, SecFull, ...
-                           Mlp, Mls, Ns1, Ns2, Ns3, Ns4, H, W, Tcore, tinter,SupposeNs, Ns) %#ok<INUSD>
+                           Mlp, Mls, Ns1, Ns2, Ns3, Ns4, H, W, Tcore,SupposeNs, Ns) %#ok<INUSD>
     if shape==1 || shape==2
         if wp==1
             % EE/ER center-leg
             okHpri = (PriPer*PriFull <= H - 2*Tcore);
             okHsec = (SecPer*SecFull <= H - 2*Tcore);
-            % width includes Mls*SecFull plus (Mls-1)*tinter
-            okW    = (Mlp*PriFull + (Mls*SecFull + max(Mls-1,0)*tinter) <= W - 3*Tcore);
+            % width includes Mls*SecFull
+            okW    = (Mlp*PriFull + (Mls*SecFull) <= W - 3*Tcore);
             ok = okHpri && okHsec && okW;
         else
-            % EE/ER double-leg (table width uses Ns2*SecFull only; no Mls term in that row)
+            % EE/ER double-leg 
             okHpri = (PriPer*PriFull <= H - 2*Tcore);
             okHsec = ((Ns3 + 2*Mls)*SecFull <= H - 2*Tcore);
             okW    = (Mlp*PriFull + Ns2*SecFull <= W - 3*Tcore);
             ok = okHpri && okHsec && okW;
         end
     else
-        % U/UR (table gives two width constraints; only the one with Mls gets tinter)
+        % U/UR
         okH  = (PriPer*PriFull + Ns1*SecFull <= H - 3*Tcore);
         okW1 = (Mlp*PriFull + Ns2*SecFull   <= W - 3*Tcore);
-        okW2 = ((Mls*SecFull + max(Mls-1,0)*tinter) + Ns2*SecFull <= W - 2*Tcore);
+        okW2 = ((Mls*SecFull) + Ns2*SecFull <= W - 2*Tcore);
         ok = okH && okW1 && okW2;
     end
-    ok = ok && (SupposeNs >= Ns);  % must be realizable
+    ok = ok && (SupposeNs >= Ns);
 end
