@@ -15,17 +15,6 @@ function y = Ecore_actual_EEER_inductor_LCC(raw,raw1,raw2,raw3,raw4,raw5,raw6, .
 % Insulation
 %-------------------------------------------
 
-% Optional interlayer tape between primary layers (can be set to 0)
-Tape_Interlayer_Thickness_Ind = 0e-6; % m per ply
-Tape_Interlayer_Wraps_Ind     = 0;    % plies between primary layers
-t_interlayer_radial_ind       = Tape_Interlayer_Wraps_Ind * Tape_Interlayer_Thickness_Ind;
-
-% Primary-to-core clearance (much milder here than in XFMER)
-UsePottingInd           = false;   % usually false for primary coils
-Potting_DS_Ind          = 20e6;    % V/m if potted
-CoronaMarginInd         = 1.5;     % modest margin on primary
-CoreInsulation_Min_Ind  = 0.10e-3; % m, baseline bobbin/liner/tape
-
 % Dielectric strength of the insulation material (V/m), discount 50%
 dielectricstrength_insulation = 0.5 * 200 * 1000 * 100; % TEFLON
 % g/m^3, density of core insulation materials
@@ -37,13 +26,13 @@ WireInsulationDensity = 2.2*1000*1000; % TEFLON
 %-------------------------------------------
 
 % Lowest allowed inductor efficiency
-etaInductor = 0.98;
+etaInductor = 0.95;
 % Max allowable temperature (C)
 Tmax = 100;
 % Min allowable temperature (C)
 Tmin = 25;
 % Maximum allowable weight (g)
-MaxWeight = 3000;
+MaxWeight = 100000;
 % Air gap (m)
 mingap = 2e-4;
 
@@ -53,11 +42,11 @@ mingap = 2e-4;
 % Minimum turns
 MinWinding = 1;
 % Maximum turns
-MaxWinding = 50;
+MaxWinding = 100;
 % Incremental winding
 IncreN = 1;
 % Maximum layer of winding
-MaxMl = 5;
+MaxMl = 10;
 % Incremental layers. The layers of a transformer reference each wrap of
 % turns that fills the window height before moving on to the next level.
 % Once one layer fills, the next layer is wound on top, seperated by an
@@ -85,10 +74,6 @@ maxpackingfactor = 0.7;
 minpackingfactor = 0.01;
 % Winding factor of litz wire, assuming only 80% of wire size is copper
 LitzFactor = 0.7;
-% Weight of bobbin as a fraction of the core insulation
-% Not used here for some reason
-BobbinWeightFactor = 0.5; %#ok<NASGU>
-SolidGateInd            = 1.5;     % solid wire OK up to this many skin-depths (diameter)
 
 % Electrical Parameters
 %----------------------------------------
@@ -96,14 +81,9 @@ SolidGateInd            = 1.5;     % solid wire OK up to this many skin-depths (
 % Electrical constants. Normally there is no need to change
 % ohm*m, resistivity of copper at 100C
 rou = 2.3*1e-8;
-% (ohm*m), conductivity of copper
-% Not used here for some reason
-sigma = 1/rou; %#ok<NASGU>
 % H/A·m^2, permeability of free space
 u0 = 4*pi*10^(-7);
-% F/m, permittivity of free space
-% Not used here for some reason
-ebs10 = 8.854*1e-12; %#ok<NASGU>
+
 
 % Function Body
 %% -------------------------------------------------------------------------------------
@@ -218,35 +198,6 @@ LcoreCoreShapeIndex = cell2mat(raw(2:m1,6));
 % Primary winding window dimensions in m
 LcorePriW = cell2mat(raw(2:m1,8))/1000;
 LcorePriH = cell2mat(raw(2:m1,9))/1000;
-% Not used here
-LcoreSecW = cell2mat(raw(2:m1,10))/1000; %#ok<NASGU>
-% Not used here
-LcoreSecH = cell2mat(raw(2:m1,11))/1000; %#ok<NASGU>
-
-
-% PriW means primary winding width
-% PriH means primary winding height
-% SecW means secondary winding width
-% SecH means secondary winding height
-
-% If EE core:
-    % If center-leg winding pattern:
-        % PriW=Lc and PriH=T
-        % SecW=N/A and SecH=N/A
-    % If double-leg winding pattern:
-        % PriW=Lc and PriH=T
-        % SecW=0.5Lc and SecH=T
-
-% If ER core:
-    % If center-leg:
-        % PriW=rAc and PriH=N/A
-        % SecW and SecH N/A
-    % If double-leg:
-        % I don't think this is in the script
-
-% Lc is center-leg width
-% T is core thickness in EE/U cores
-% rAc is core radius in ER, UR cores.
 
 LcoreWindowW = cell2mat(raw(2:m1,12))/1000;
 LcoreWindowH = cell2mat(raw(2:m1,13))/1000;
@@ -459,7 +410,7 @@ else
     % solid equivalent diameter
     dsolid=2.*sqrt(Areq_p./pi);
     % Solid vs. litz
-    useSolid=dsolid<=SolidGateInd.*(2.*skindepth);
+    useSolid=dsolid<=2.*skindepth;
     % Litz diameter
     dstrand_litz=max(MinLitzDia,2.*skindepth);
     % strand cross section area
@@ -486,32 +437,24 @@ else
     CopperPacking=(A_pri_cu.*Np)./(H.*W);
     OverallPacking=(A_pri_full.*Np)./(H.*W);
 
-    if UsePottingInd
-        DS_clearance_ind=Potting_DS_Ind;
-    else
-        DS_clearance_ind=dielectricstrength_insulation;
-    end
-    CoreInsulationThickness=max(CoreInsulation_Min_Ind,(CoronaMarginInd.*Vpri)./DS_clearance_ind);
+    CoreInsulationThickness=Vpri./dielectricstrength_insulation;
     
     % Computes mean length of turn for pri and sec, accounting for geometry
     % and winding pattern
     %-----------------------------------------------------------------------------
-
-    radial_build_rect=2.*(Mlp.*Pri_FullWireDia+max(Mlp-1,0).*t_interlayer_radial_ind);
-    radial_build_circ=(Mlp.*Pri_FullWireDia+max(Mlp-1,0).*t_interlayer_radial_ind).*0.5;
 
     isEE=(LcoreCoreShapeIndex==1);
     isER=(LcoreCoreShapeIndex==2);
     isU=(LcoreCoreShapeIndex==3);
     isUR=(LcoreCoreShapeIndex==4);
     
-    TLp(isEE)=Np(isEE).*2.*(PriW(isEE)+PriH(isEE)+4.*CoreInsulationThickness(isEE)+radial_build_rect(isEE));
-    TLp(isER)=2.*pi.*Np(isER).*(PriW(isER)./2+CoreInsulationThickness(isER)+radial_build_circ(isER));
-    TLp(isU)=2.*Np(isU).*(PriW(isU)+PriH(isU)+4.*CoreInsulationThickness(isU)+radial_build_rect(isU));
-    TLp(isUR)=2.*pi.*Np(isUR).*(PriW(isUR)./2+CoreInsulationThickness(isUR)+radial_build_circ(isUR));
-    
+    TLp(isEE)=Np(isEE).*2.*(PriW(isEE)+PriH(isEE)+4.*CoreInsulationThickness(isEE));
+    TLp(isER)=2.*pi.*Np(isER).*(PriW(isER)./2+CoreInsulationThickness(isER));
+    TLp(isU)=2.*Np(isU).*(PriW(isU)+PriH(isU)+4.*CoreInsulationThickness(isU));
+    TLp(isUR)=2.*pi.*Np(isUR).*(PriW(isUR)./2+CoreInsulationThickness(isUR));
 
-    Mlp_index=find((Mlp.*Pri_FullWireDia+max(Mlp-1,0).*t_interlayer_radial_ind)<=(W-2.*CoreInsulationThickness));
+    % These are actually used below
+    Mlp_index=find((Mlp.*Pri_FullWireDia)<=(W-2.*CoreInsulationThickness));
     Pri_PerLayer_index=find((Pri_PerLayer.*Pri_FullWireDia)<=(H-2.*CoreInsulationThickness));
     
     % Calculate Copper Loss
