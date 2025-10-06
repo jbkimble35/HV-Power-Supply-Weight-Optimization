@@ -70,23 +70,23 @@ Date = '9_22_25';
 % Quality factor
 Q_range = 0.5:0.1:1.5;
 % Resonant frequency
-f0_range = 500000;
+f0_range = 4000;
 % Capacitance ratio
 A_range = 0.05:0.05:0.3;
 % Turns ratio
-K_range = 20;
+K_range = 50;
 % DC input voltage range (unipolar peak) (if Vppeak is the param. to select around,
 % keep GT ~1, but optimal weight is usually achieved with tank gain of ~2)
-Vin_range = 500;
-% Peak amplitude of the output voltage that one hope to achieve (V)
-Vo_range = 10000;
+Vin_range = 100;
+% Peak of the output voltage that one hope to achieve (V)
+Vo_range = 5000;
 % Output power desired (W)
-Po_range = 1000;
+Po_range = 100;
 % frequency of the transformer
-fs_range = 500000;
+fs_range = 4000;
 
 % Winding Pattern index: 1 indicates center leg winding, 2 indicates double
-Winding_Pattern = 2;
+Winding_Pattern = 1;
 % Hypothesis: record why you want to run the sim
 Hypothesis ='';
 % Notes: record any changes you made to the code
@@ -140,6 +140,7 @@ f0 = reshape(f0,[],1);
 A = reshape(A,[],1);
 K = reshape(K,[],1);
 
+
 % All of the following calculations are computed for each element in the
 % matrix individually via the A.^B, A.*B, etc. operator. The sizes of A and B
 % in A.^B must be equal or compatible. This allows for a large amount of
@@ -160,7 +161,7 @@ Imax = Vin_range.*GT./RT.*sqrt(1+(fs_range./f0).^2.*Q.^2.*(A+1).^2);
 
 % If effective gain GT.*K is within 20% of required gain, the design is
 % acceptable. If not, index ignored. If all are ignored, error is thrown.
-KeepIndex = intersect(find(GT.*K>=Vo_range/Vin_range),find(GT.*K<=1.2*Vo_range/Vin_range));
+KeepIndex = intersect(find(GT.*K>=Vo_range./Vin_range),find(GT.*K<=1.2*Vo_range./Vin_range));
 KeepIndex = intersect(KeepIndex,find(GT > 1));
 if isempty(KeepIndex)
     error('Driver:NoCandidates', ...
