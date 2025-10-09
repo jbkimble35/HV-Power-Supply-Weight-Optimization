@@ -17,16 +17,15 @@ This is a script modified from the 2020 thesis by Yiou He: "Towards High Voltage
 -  Make the RTC script match the inductor and transformer design script so that every iteration of the loop writes to a row of the final design instead of to a global variable.
 -  General fixes need to be performed on the RTC script to get it working.
 -  Need to ensure realism of inductor data through cross-checking with more of the thesis results. Transformer comparison has already been done and is in the comparison .xlsx file.
--  Need to replace core insulation thickness with a new value, need to take into account the epoxy between wires in each layer and between layers, need to include secondary layer stress and interlayer tape, need to filter designs by their volts-per-layer.
 -  A big issue is that between results, I need to change ranges like the max layers, increment Q factor, etc. not because they are important parameters for me, but because I can't have them too high due to memory limitations and I can't have them too low to risk missing designs.
 
 ## Recent changes:
-- Added GPU computing options for this transformer script, but the old CPU options also work
 - Allowed internal automatic computing for whether litz wire or solid magnet wire is better, and chooses corresponding results for the optimal choice
 - Both winding pattern options work now, center and double-leg, based on the thesis text.
 - U and UR core implementations for the winding pattern and insulation were included, since they weren't before.
-- Made it more efficient by allowing GPU computation on some of the most computation-intensive array functions, which were tested with the code profiler toolbox
 - Multiple core densities can be used in candidate design sweep
+- Interlayer tape layout option was added.
+- Datasheet accurate coresizedata was added.
 
 ## RTC Script:
 - Currently in a transition state, doesn't work
@@ -34,6 +33,7 @@ This is a script modified from the 2020 thesis by Yiou He: "Towards High Voltage
 
 ## Future Work:
 - Import Voltage Multiplier weight scripts
+- Create a way to scrape coresize datasheets online for core geometry dimensions, or just to scrape the PDFs for the correct values.
 
 ## Data formatting:
 
