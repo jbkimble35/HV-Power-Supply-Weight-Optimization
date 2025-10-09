@@ -26,15 +26,15 @@ WireInsulationDensity = 2.2*1000*1000; % TEFLON
 %-------------------------------------------
 
 % Lowest allowed inductor efficiency
-etaInductor = 0.95;
+etaInductor = 0.98;
 % Max allowable temperature (C)
 Tmax = 100;
 % Min allowable temperature (C)
 Tmin = 25;
 % Maximum allowable weight (g)
-MaxWeight = 100000;
+MaxWeight = 14000;
 % Air gap (m)
-mingap = 2e-4;
+mingap = 2e-6;
 
 % Winding and Wire Parameters
 %------------------------------------------
@@ -149,7 +149,7 @@ for i = 1:1:NoMat
 
         % This checks if material data is 0.X away from the desired
         % frequency, and if it is, FreqFlag is raised for that material.
-        if (abs(fs_range - F_atPv_500(i,j))/fs_range <= 0.4)
+        if (abs(fs_range - F_atPv_500(i,j))/fs_range <= 0.2)
             FreqFlag(i) = 1;
         end
 
@@ -324,7 +324,10 @@ matfs = F_atPv_500(matno_record,:) .* matfsIndex;
 % K1, alpha, and beta for the frequencies given by matfs. Then rowIdcs
 % stores the indices in the arrays that correspond to valid frequency
 % points.
-K1 = K1_range(matno_record,:) .* matfsIndex * 1000;
+
+
+% removed 1000*
+K1 = K1_range(matno_record,:) .* matfsIndex*1000;
 alpha = alpha_range(matno_record,:) .* matfsIndex;
 beta = beta_range(matno_record,:) .* matfsIndex;
 [rowIdcs, ~] = find(matfs > 0);
@@ -521,24 +524,85 @@ else
     % Filter the designs
     %---------------------------------------------
 
-    B_index = find(Bm <= BSAT * BSAT_discount);
-    P_loss_index = find((Pcopper + Pcore) <= Po./etaInductor - Po);
+    % Filter by B
+    B_index = find(Bm < BSAT*BSAT_discount);
+    [Bmin,BminIndex] = min(Bm);
+        
+    % Filter by Temperature and Power Loss
+    P_loss_index = find(Pcopper + Pcore <= Po./etaInductor - Po);
     Tafterloss_index = find(Tafterloss <= Tmax);
     Tmin_index = find(Tafterloss >= Tmin);
+    [Tminimum,TminValIndex] = min(Tafterloss);
+    [Pmin,PminValIndex] = min(Pcopper+Pcore);
+
+    % Filter by weight
     TotalWeight_index = find(TotalWeight <= MaxWeight);
-    
+    [WMin,WminValIndex] = min(TotalWeight);
+
+    % Filter by packing factor min and max
     OverallPackingmin_index = find(OverallPacking >= minpackingfactor);
     OverallPackingmax_index = find(OverallPacking <= maxpackingfactor);
+    [PackingMin,PackingMinValIndex] = max(OverallPacking);
+    [PackingMax,PackingMaxValIndex] = min(OverallPacking);
+
+    % Filter by layer width and height
     Mlp_index = find(Mlp .* Pri_FullWireDia <= W - 2 * CoreInsulationThickness);
     Pri_PerLayer_index = find(Pri_PerLayer.*Pri_FullWireDia<H-2*CoreInsulationThickness);
-    
-    idxList = {B_index, P_loss_index, Tafterloss_index, Tmin_index, TotalWeight_index, ...
-               OverallPackingmin_index, OverallPackingmax_index, Mlp_index, Pri_PerLayer_index};
-    
-    Index_Meet_All = idxList{1};
-    for k = 2:numel(idxList)
-        Index_Meet_All = intersect(Index_Meet_All, idxList{k});
+    [MlpMax,MlpMaxValIndex] = max(Mlp.*Pri_FullWireDia);
+    [PriPerLayerMax,PPLMaxIndex] = max(Pri_PerLayer.*Pri_FullWireDia);
+
+    if isempty(P_loss_index)
+        fprintf("Inductor Bottlenecked. Min Power loss out of all candidates: %.2f Index: %d",Pmin,PminValIndex);
+        y = zeros(1,43);
+        return
     end
+    if isempty(Tafterloss_index)
+        fprintf("Inductor Bottlenecked. Min T out of all candidates: %.2f Index: %d",Tminimum,TminValIndex);
+        y = zeros(1,43);
+        return
+    end
+    if isempty(B_index)
+        fprintf("Inductor Bottlenecked. Min B out of all candidates: %.2f Index: %d",Bmin,BminIndex);
+        y = zeros(1,43);
+        return
+    end
+    if isempty(TotalWeight_index)
+        fprintf("Inductor Bottlenecked. Min Weight out of all candidates: %.2f Index: %d",WMin,WminValIndex);
+        y = zeros(1,43);
+        return
+    end
+    if isempty(OverallPackingmin_index)
+        fprintf("Inductor Bottlenecked. Min packing factor out of all candidates: %.2f Index: %d",PackingMin,PackingMinValIndex);
+        y = zeros(1,43);
+        return
+    end
+    if isempty(OverallPackingmin_index)
+        fprintf("Inductor Bottlenecked. Max packing factor out of all candidates: %.2f Index: %d",PackingMax,PackingMaxValIndex);
+        y = zeros(1,43);
+        return
+    end
+    if isempty(Mlp_index)
+        fprintf("Inductor Bottlenecked. Max layers width of all candidates: %.2f Index: %d",MlpMax,MlpMaxValIndex);
+        y = zeros(1,43);
+        return
+    end
+    if isempty(Pri_PerLayer_index)
+        fprintf("Inductor Bottlenecked. Max layer height out of all candidates: %.2f Index: %d",PriPerLayerMax,PPLMaxIndex);
+        y = zeros(1,43);
+        return
+    end
+
+
+    Index_Meet_All = B_index;
+    Index_Meet_All = intersect(Index_Meet_All, P_loss_index);
+    Index_Meet_All = intersect(Index_Meet_All, Tafterloss_index);
+    Index_Meet_All = intersect(Index_Meet_All, Tmin_index);
+    Index_Meet_All = intersect(Index_Meet_All, TotalWeight_index);
+    Index_Meet_All = intersect(Index_Meet_All, OverallPackingmin_index);
+    Index_Meet_All = intersect(Index_Meet_All, OverallPackingmax_index);
+    Index_Meet_All = intersect(Index_Meet_All, Mlp_index);
+    Index_Meet_All = intersect(Index_Meet_All, Pri_PerLayer_index);
+
 
     % Build Results Table 
     %% -----------------------------------------------------------------------------
