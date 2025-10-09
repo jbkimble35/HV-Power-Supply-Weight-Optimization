@@ -46,12 +46,16 @@ Transformer:
 
 % Ensure the excel files are not open elsewhere, or else
 % you will get an error:
-
 % "Unable to open file 'path' as
 % a workbook. Check that the file exists,..."
 
 % If your variables are too restrictive for your data, you will get
 % a table with no values, as no set of variables match your requirements
+
+% I believe that at high frequencies and high powers, the core losses will
+% be high no matter what with not many high core size options,
+% and it's not a controllable factor to some extent. If you input high 
+% power and/or low frequency, you will get low efficiency.
 
 corelossfile = 'CoreLossData.xlsx';
 raw1 = readcell('CoreLossData.xlsx','Sheet','Freq');
@@ -62,28 +66,31 @@ raw5 = readcell('CoreLossData.xlsx','Sheet','MU');
 raw6 = readcell('CoreLossData.xlsx','Sheet','Density');
 
 coresizefile = 'CoreSizeData.xlsx';
-raw = readcell('CoreSizeData.xlsx','Sheet','Ecore');
+% Ecore is the larger, perhaps inaccurate dataset, while ReviewedCores is a
+% manually vetted selection of cores
+raw = readcell('CoreSizeData.xlsx','Sheet','ReviewedCores');
 
 %% Parameters to Adjust
 
 Date = '9_22_25';
 % Quality factor
-Q_range = 0.5:0.1:1.5;
+Q_range = 0.5:0.1:2;
 % Resonant frequency
-f0_range = 4000;
+f0_range = 100000;
 % Capacitance ratio
-A_range = 0.05:0.05:0.3;
+A_range = 0.05:0.05:0.5;
 % Turns ratio
-K_range = 50;
+K_range = [12,13];
 % DC input voltage range (unipolar peak) (if Vppeak is the param. to select around,
 % keep GT ~1, but optimal weight is usually achieved with tank gain of ~2)
-Vin_range = 100;
+Vin_range = 800;
 % Peak of the output voltage that one hope to achieve (V)
-Vo_range = 5000;
+% peak to peak is 2x this value
+Vo_range = 10000;
 % Output power desired (W)
-Po_range = 100;
+Po_range = 500;
 % frequency of the transformer
-fs_range = 4000;
+fs_range = 100000;
 
 % Winding Pattern index: 1 indicates center leg winding, 2 indicates double
 Winding_Pattern = 1;
@@ -247,7 +254,12 @@ writecell(repmat({''},row,col),filename_xfmer,'Sheet',ResultDatasheetname);
 writetable(XfmerDesignTable,filename_xfmer,'Sheet',ResultDatasheetname);
 
 Xfinal = readcell(filename_xfmer,'Sheet',ResultDatasheetname);
-weightX = Xfinal{2,41};
+
+if size(Xfinal,1)>=2
+    weightX = Xfinal{2,41};
+else
+    weightX = 0;
+end
 fprintf("Transformer Weight is %.2f g",weightX);
 
 % Results for inductor and the column names are passed here.
@@ -272,5 +284,9 @@ writecell(repmat({''},row,col),filename_inductor,'Sheet',ResultDatasheetname);
 writetable(InductorDesignTable,filename_inductor,'Sheet',ResultDatasheetname);
 
 Lfinal = readcell(filename_inductor,'Sheet',ResultDatasheetname);
-weightL = Lfinal{2,29};
+if size(Lfinal,1)>=2
+    weightL = Lfinal{2,29};
+else 
+    weightL = 0;
+end
 fprintf("Inductor Weight is %.2f g",weightL);
