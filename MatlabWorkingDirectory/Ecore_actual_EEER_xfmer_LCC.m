@@ -10,20 +10,14 @@ function y = Ecore_actual_EEER_xfmer_LCC(raw,raw1,raw2,raw3,raw4,raw5,raw6, ...
 % Insulation
 %-------------------------------------------
 
-% Put interlayer tape and potting here
-
 % Use interlayer tape instead of full wire jacket ratings?
 layerTapeUse = true;
 kaptonDielStrength = 0.5*200e6; % V/m derated 50%
 kaptonThickness = 60e-6; % m
 kaptonDensity = 1.42e6; % g/m^3
 enamelThickness = 60e-6;
-marginTape = 0;
-% What is margin tape for?
-cover_fac  = 2; % overlap of tape
-if layerTapeUse == false
-    marginTape = 0;
-end
+MinTapeMargin = 5e-4;
+cover_fac  = 1.05; % overlap of tape on other areas
 
 % Core sheath insulation
 CoreInsulationDensity = 2.2e6;       % g/m^3 (Teflon)
@@ -56,7 +50,7 @@ MaxMls = 10;
 % Incremental layer of secondary winding
 IncreMls = 1;
 % Max allowable transformer weight (g)
-MaxWeight = 1000;
+MaxWeight = 5000;
 
 % Deratings
 %------------------------------------------
@@ -65,10 +59,10 @@ MaxWeight = 1000;
 BSAT_discount = 0.75;
 % Core loss multiplier
 CoreLossMultiple = 1.5;
-maxpackingfactor = 0.99;
+maxpackingfactor = 0.7;
 minpackingfactor = 0.01;
 % Litz copper fill
-LitzFactor = 0.75;
+LitzFactor = 0.8;
 
 % Electrical constants
 %-------------------------------------------
@@ -80,10 +74,10 @@ rou = 2.3e-8;
 % permittivity of free space HA/m^2
 u0 = 4*pi*1e-7;
 % Minimum secondary wire diameter (m)
-MinSecWireSize = 0.4e-3;
+MinWireSize = 0.07874e-3;
 % Max allowable current density in wire, (A/m^2)
 Jwmax = 500*100*100;
-% Minimal litz diameter (A/m^2)
+% Minimal litz diameter (m)
 MinLitzDia = 0.07874e-3; % AWG40
 
 
@@ -432,13 +426,13 @@ else
     Areq_s=Isrms./Jwmax;                                % [m^2]
     
     dsolid_p=2.*sqrt(Areq_p./pi);                       % [m]
-    dsolid_s=max(MinSecWireSize,2.*sqrt(Areq_s./pi));                       % [m]
+    dsolid_s=max(MinWireSize,2.*sqrt(Areq_s./pi));                       % [m]
     
-    useSolid_p=(dsolid_p<=2.*skindepth);
-    useSolid_s=(dsolid_s<=2.*skindepth);
+    useSolid_p=(dsolid_p<=skindepth);
+    useSolid_s=(dsolid_s<=skindepth);
     
     MinLitzDia = MinLitzDia*ones(length(skindepth),1);
-    dstrandMinlitz=max(MinLitzDia,2.*skindepth);          % [m]
+    dstrandMinlitz=max(MinLitzDia,skindepth);          % [m]
     AstrandMin=pi.*(dstrandMinlitz./2).^2;                   % [m^2]
     
     % Primary wire diameter, number of strands, and jacket+wire diameter
@@ -447,16 +441,15 @@ else
     Pri_Nstrands=ones(size(Iprms));
     Pri_Nstrands(~useSolid_p)=ceil(Areq_p(~useSolid_p)./AstrandMin(~useSolid_p));
 
-    Pri_WireDia=dsolid_p;
+    Pri_WireDia=max(MinWireSize,dsolid_p);
     idx=~useSolid_p;
     if any(idx)
         Pri_WireDia(idx)=2.*sqrt((Pri_Nstrands(idx).*AstrandMin(idx))./(pi.*LitzFactor));
     end
     % Strand diameter
-    Pri_ds=dsolid_p;
+    Pri_ds=max(MinWireSize,dsolid_p);
     Pri_ds(idx)=dstrandMinlitz(idx);
 
-    
     Pri_FullWireDia = Pri_WireDia + 2.*Vppeak./dielectricstrength_insulation;
     if layerTapeUse
         Pri_FullWireDia = Pri_WireDia + enamelThickness.*2;
@@ -467,13 +460,13 @@ else
 
     Sec_Nstrands=ones(size(Isrms));
     Sec_Nstrands(~useSolid_s)=ceil(Areq_s(~useSolid_s)./AstrandMin(~useSolid_s));
-    Sec_WireDia=dsolid_s;
+    Sec_WireDia=max(MinWireSize,dsolid_s);
     idx=~useSolid_s;
     if any(idx)
         Sec_WireDia(idx)=2.*sqrt((Sec_Nstrands(idx).*AstrandMin(idx))./(pi.*LitzFactor));
     end
     % Strand diameter
-    Sec_ds=dsolid_s;
+    Sec_ds=max(MinWireSize,dsolid_s);
     Sec_ds(idx)=dstrandMinlitz(idx);
 
     % Changed vsp/die to have 2* factor like pri.
@@ -488,12 +481,15 @@ else
     CoreInsulationThickness = Vinsulation_max./dielectricstrength_insulation;
     Pri_PerLayer=floor(Np./Mlp);
     Sec_PerLayer=floor(Ns./Mls);
-    numTapePerLayerPri = ceil((Vppeak./Mlp)./(kaptonDielStrength*kaptonThickness));
-    numTapePerLayerSec = ceil((Vinsulation_max./Mls)./(kaptonDielStrength*kaptonThickness));
+
     if layerTapeUse
+        numTapePerLayerPri = ceil((Vppeak./Mlp)./(kaptonDielStrength*kaptonThickness));
+        numTapePerLayerSec = ceil((Vinsulation_max./Mls)./(kaptonDielStrength*kaptonThickness));
         tTapePri = max(Mlp-1,0).*numTapePerLayerPri.*kaptonThickness;
         tTapeSec = max(Mls-1,0).*numTapePerLayerSec.*kaptonThickness;
     else
+        numTapePerLayerPri = zeros(size(Mlp));
+        numTapePerLayerSec = zeros(size(Mls));
         tTapePri = zeros(size(Mlp));
         tTapeSec = zeros(size(Mls));
     end
@@ -625,8 +621,8 @@ else
 
     TLp = TLp';
     TLs = TLs';
-    Pri_Rdc = rou.*TLp./((pi.*(Pri_ds.*Pri_Nstrands).^2)./4);
-    Sec_Rdc = rou.*TLs./((pi.*(Sec_ds.*Sec_Nstrands).^2)./4);
+    Pri_Rdc = rou .* TLp ./ ( Pri_Nstrands .* (pi .* Pri_ds.^2 ./ 4) );
+    Sec_Rdc = rou .* TLs ./ ( Sec_Nstrands .* (pi .* Sec_ds.^2 ./ 4) );
     Pri_Fr = Pri_xp.*((sinh(2.*Pri_xp) + sin(2.*Pri_xp))./(cosh(2.*Pri_xp) - cos(2.* ...
         Pri_xp)) + 2.*(Mlp.^2.*Pri_Nstrands - 1)./3.*(sinh(Pri_xp) - sin(Pri_xp))./( ...
         cosh(Pri_xp) + cos(Pri_xp)));
@@ -679,9 +675,9 @@ else
     % Wire weights
     %---------------------------------------------
 
-    WeightPri_copper = (pi.*Pri_WireDia.^2./4).*TLp.* CopperDensity;
+    WeightPri_copper = pi.*Pri_WireDia.^2./4.*TLp.*CopperDensity;
     WeightPri_Insu = (pi.*(Pri_FullWireDia.^2 - Pri_WireDia.^2)./4).*TLp.*WireInsulationDensity;
-    WeightSec_copper = (pi.*Sec_WireDia.^2./4).*TLs.*CopperDensity;
+    WeightSec_copper = pi.*Sec_WireDia.^2./4.*TLs.*CopperDensity;
     WeightSec_Insu = (pi.*(Sec_FullWireDia.^2 - Sec_WireDia.^2)./4).*TLs.*WireInsulationDensity;
 
     % Tape weight
@@ -691,8 +687,9 @@ else
     if ~layerTapeUse
         Weight_InterlayerTape = zeros(size(Mlp));  % g
         V_tape = zeros(size(Mlp)); % g
+        tapeMargin = 0;
     else
-
+        tapeMargin = max(0.02*H, MinTapeMargin);
         % total build incl. tape (for average circumference)
         a1 = Mlp.*Pri_FullWireDia + max(Mlp-1,0).*numTapePerLayerPri.*kaptonThickness; % m
         a2 = Mls.*Sec_FullWireDia + max(Mls-1,0).*numTapePerLayerSec.*kaptonThickness; % m
@@ -727,14 +724,13 @@ else
         L_tape_total = cover_fac .* ( nBndPri.*numTapePerLayerPri.*Lavg_il_p + nBndSec.*numTapePerLayerSec.*Lavg_il_s ); % m
     
         % tape width and volume
-        w_tape = H + 2*marginTape;                 % m
+        w_tape = H + 2*tapeMargin;                 % m
         V_tape = kaptonThickness .* w_tape .* L_tape_total;  % m^3
     
         % mass in grams (KaptonDensity in g/m^3)
         Weight_InterlayerTape = kaptonDensity .* V_tape;  % g
     end
    
-
     % Compute total weight
     %---------------------------------------------
     TotalWeight = Wcore + WeightPri_copper + WeightSec_copper + WeightPri_Insu + ...
@@ -765,13 +761,20 @@ else
     else 
         CopperPacking  = (((pi.*(Pri_WireDia.^2))./4).*Np + ((pi.*(Sec_WireDia.^2))./4).*Ns)./ (H.*W);
         OverallPacking = (((pi.*(Pri_FullWireDia.^2))./4).*Np + ((pi.*(Sec_FullWireDia.^2))./4).*Ns)./(H.*W);
-  
     end
     if layerTapeUse
         % might be incorrect due to approx. as H*t 
-        OverallPacking = (((pi.*(Pri_FullWireDia.^2)/4).*Np + (pi.*(Sec_FullWireDia.^2)/4).*(Ns./2)) ...
-            + (H .* ( max(Mlp-1,0).*numTapePerLayerPri.*kaptonThickness ...
-            + max(Mls-1,0).*numTapePerLayerSec.*kaptonThickness))) ./ (H.*W);
+        if Winding_Pattern == 2
+            CopperPacking  = (((pi.*(Pri_WireDia.^2))./4).*Np + ((pi.*(Sec_WireDia.^2))./4).*(Ns./2))./ ((H-2.*tapeMargin).*W);
+            OverallPacking = (((pi.*(Pri_FullWireDia.^2)/4).*Np + (pi.*(Sec_FullWireDia.^2)/4).*(Ns./2)) ...
+                + (H.* ( max(Mlp-1,0).*numTapePerLayerPri.*kaptonThickness ...
+                + max(Mls-1,0).*numTapePerLayerSec.*kaptonThickness))) ./ ((H-2.*tapeMargin).*W);
+        else 
+            CopperPacking  = (((pi.*(Pri_WireDia.^2))./4).*Np + ((pi.*(Sec_WireDia.^2))./4).*Ns)./ ((H-2.*tapeMargin).*W);
+            OverallPacking = (((pi.*(Pri_FullWireDia.^2)/4).*Np + (pi.*(Sec_FullWireDia.^2)/4).*(Ns)) ...
+                + (H.* ( max(Mlp-1,0).*numTapePerLayerPri.*kaptonThickness ...
+                + max(Mls-1,0).*numTapePerLayerSec.*kaptonThickness))) ./ ((H-2.*tapeMargin).*W);
+        end
     end
     OverallPackingmin_index = find(OverallPacking >= minpackingfactor);
     OverallPackingmax_index = find(OverallPacking <= maxpackingfactor);
@@ -827,10 +830,10 @@ else
     if is_center_leg_pattern
         % Height constraints (primary and secondary) and width constraint (both)
         EEER_center_pri_height_ok = is_EE_or_ER_core & ...
-            (Pri_PerLayer.*Pri_FullWireDia <= H - 2.*CoreInsulationThickness-2*marginTape);
+            (Pri_PerLayer.*Pri_FullWireDia <= H - 2.*CoreInsulationThickness-2*tapeMargin);
     
         EEER_center_sec_height_ok = is_EE_or_ER_core & ...
-            (Sec_PerLayer.*Sec_FullWireDia <= H - 2.*CoreInsulationThickness-2*marginTape);
+            (Sec_PerLayer.*Sec_FullWireDia <= H - 2.*CoreInsulationThickness-2*tapeMargin);
     
         EEER_center_width_ok = is_EE_or_ER_core & ...
             (Mlp.*Pri_FullWireDia+tTapePri+tTapeSec+(Mls.*Sec_FullWireDia) ...
@@ -843,10 +846,10 @@ else
     % ===== EE/ER cores: double-leg pattern =====
     if is_double_leg_pattern
         EEER_double_pri_height_ok = is_EE_or_ER_core & ...
-            (Pri_PerLayer.*Pri_FullWireDia <= H - 2.*CoreInsulationThickness-2*marginTape);
+            (Pri_PerLayer.*Pri_FullWireDia <= H - 2.*CoreInsulationThickness-2*tapeMargin);
     
         EEER_double_sec_height_ok = is_EE_or_ER_core & ...
-            ((Ns_group3 + 2.*Mls).*Sec_FullWireDia <= H - 2.*CoreInsulationThickness-2*marginTape);
+            (Ns_group3.*Sec_FullWireDia <= H - 2.*CoreInsulationThickness-2*tapeMargin);
     
         EEER_double_width_ok = is_EE_or_ER_core & ...
             (Mlp.*Pri_FullWireDia +tTapePri+tTapeSec+ Ns_group2.*Sec_FullWireDia <= W - 3.*CoreInsulationThickness);
@@ -858,7 +861,7 @@ else
     % ===== U/UR cores (table gives one set; apply for either selected pattern) =====
     % Height: Pri_perlayer*PriFull + Ns1*SecFull <= H - 3*TcoreInsu
     UUR_height_ok = is_U_or_UR_core & ...
-        (Pri_PerLayer.*Pri_FullWireDia + Ns_group1.*Sec_FullWireDia <= H - 3.*CoreInsulationThickness-2*marginTape);
+        (Pri_PerLayer.*Pri_FullWireDia + Ns_group1.*Sec_FullWireDia <= H - 3.*CoreInsulationThickness-2*tapeMargin);
     
     % Width #1: Mlp*PriFull + Ns2*SecFull <= W - 3*TcoreInsu
     UUR_width1_ok = is_U_or_UR_core & ...
@@ -884,7 +887,6 @@ else
         return
     end
 
-
     % Final Filter
     %---------------------------------------------------------------------------------
 
@@ -895,7 +897,6 @@ else
     Index_Meet_All = intersect(Index_Meet_All,OverallPackingmin_index);
     Index_Meet_All = intersect(Index_Meet_All,OverallPackingmax_index);
     Index_Meet_All = intersect(Index_Meet_All,WindowFit_index);
-
 
     % Sort by total weight and keep only the lightest one
     [~,SortIndex] = sort(TotalWeight(Index_Meet_All));
