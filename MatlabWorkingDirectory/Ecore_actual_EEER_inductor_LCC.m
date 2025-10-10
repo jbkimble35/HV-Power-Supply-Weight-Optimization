@@ -15,6 +15,8 @@ function y = Ecore_actual_EEER_inductor_LCC(raw,raw1,raw2,raw3,raw4,raw5,raw6, .
 % Insulation
 %-------------------------------------------
 
+% Need to add interlayer tape
+
 % Dielectric strength of the insulation material (V/m), discount 50%
 dielectricstrength_insulation = 0.5 * 200 * 1000 * 100; % TEFLON
 % g/m^3, density of core insulation materials
@@ -32,9 +34,9 @@ Tmax = 100;
 % Min allowable temperature (C)
 Tmin = 25;
 % Maximum allowable weight (g)
-MaxWeight = 14000;
+MaxWeight = 5000;
 % Air gap (m)
-mingap = 2e-6;
+mingap = 1e-6;
 
 % Winding and Wire Parameters
 %------------------------------------------
@@ -46,14 +48,14 @@ MaxWinding = 100;
 % Incremental winding
 IncreN = 1;
 % Maximum layer of winding
-MaxMl = 10;
+MaxMl = 12;
 % Incremental layers. The layers of a transformer reference each wrap of
 % turns that fills the window height before moving on to the next level.
 % Once one layer fills, the next layer is wound on top, seperated by an
 % insulation layer.
 IncreMl = 1;
 % Minimal wire diameter (m)
-MinWireDia = 0.079/1000; %#ok<NASGU> % AWG28, 0.35 mm is AWG29, 0.079 is AWG40
+MinWireDia = 0.079/1000; % AWG28, 0.35 mm is AWG29, 0.079 is AWG40
 % Max allowable current density in the wire (A/m^2)
 Jwmax = 500 * 100 * 100;
 % Minimal litz diameter one can get (m)
@@ -73,7 +75,7 @@ maxpackingfactor = 0.7;
 % Minimum packing factor
 minpackingfactor = 0.01;
 % Winding factor of litz wire, assuming only 80% of wire size is copper
-LitzFactor = 0.7;
+LitzFactor = 0.8;
 
 % Electrical Parameters
 %----------------------------------------
@@ -390,8 +392,7 @@ else
     Wa = H .* W;
 
     % Core weight (g)
-    densityRow = CoreDensity(matno_record);
-    Wcore = Ve.*densityRow;
+    Wcore = Ve.*CoreDensity(matno_record);
 
     % Check core loss
     Pcore = CoreLossMultiple .* Ve .* K1 .* fs.^alpha .* Bm.^beta;
@@ -413,9 +414,9 @@ else
     % solid equivalent diameter
     dsolid=2.*sqrt(Areq_p./pi);
     % Solid vs. litz
-    useSolid=dsolid<=2.*skindepth;
+    useSolid=dsolid<=skindepth;
     % Litz diameter
-    dstrand_litz=max(MinLitzDia,2.*skindepth);
+    dstrand_litz=max(MinLitzDia,skindepth);
     % strand cross section area
     Astrand=pi.*(dstrand_litz./2).^2;
     % Number of strands default to 1
@@ -423,13 +424,14 @@ else
     % Where not solid, use litz number of strands
     Pri_Nstrands(~useSolid)=ceil(Areq_p(~useSolid)./Astrand(~useSolid));
     % use solid diameter if solid, bundle diameter if litz
-    Pri_WireDia=dsolid;
+    Pri_WireDia=max(MinWireDia,dsolid);
     idLitz=~useSolid;
     if any(idLitz)
         Pri_WireDia(idLitz)=2.*sqrt((Pri_Nstrands(idLitz).*Astrand(idLitz))./(pi.*LitzFactor));
     end
+    
     % Strand diameter
-    Pri_ds=dsolid;
+    Pri_ds=max(MinWireDia,dsolid);
     Pri_ds(idLitz)=dstrand_litz(idLitz);
     % Full wire size with insulation
     Pri_FullWireDia=Pri_WireDia+2.*(Vpri./dielectricstrength_insulation);
@@ -456,11 +458,10 @@ else
     TLp(isU)=2.*Np(isU).*(PriW(isU)+PriH(isU)+4.*CoreInsulationThickness(isU));
     TLp(isUR)=2.*pi.*Np(isUR).*(PriW(isUR)./2+CoreInsulationThickness(isUR));
 
-    % These are actually used below
     Mlp_index=find((Mlp.*Pri_FullWireDia)<=(W-2.*CoreInsulationThickness));
     Pri_PerLayer_index=find((Pri_PerLayer.*Pri_FullWireDia)<=(H-2.*CoreInsulationThickness));
     
-    % Calculate Copper Loss
+    % Calculate Copper Loss & Temp rise
     %--------------------------------------------------------
 
     PriKlayer=sqrt(pi.*Pri_Nstrands).*Pri_ds./(2.*Pri_WireDia);
@@ -514,11 +515,12 @@ else
     % Copper & wire-insulation weights
     %---------------------------------------------
 
-    WeightPri_copper=(Pri_Nstrands.*(pi.*(Pri_ds.^2)./4)).*TLp.*CopperDensity;
+    WeightPri_copper = pi.*Pri_WireDia.^2./4.*TLp.*CopperDensity;
     WeightPri_Insu=(pi.*(Pri_FullWireDia.^2-Pri_WireDia.^2)./4).*TLp.*WireInsulationDensity;
-    
+        
     % Total weight
     %---------------------------------------------
+
     TotalWeight=Wcore+WeightPri_copper+WeightPri_Insu+WeightCore_Insu;
 
     % Filter the designs
@@ -546,8 +548,6 @@ else
     [PackingMax,PackingMaxValIndex] = min(OverallPacking);
 
     % Filter by layer width and height
-    Mlp_index = find(Mlp .* Pri_FullWireDia <= W - 2 * CoreInsulationThickness);
-    Pri_PerLayer_index = find(Pri_PerLayer.*Pri_FullWireDia<H-2*CoreInsulationThickness);
     [MlpMax,MlpMaxValIndex] = max(Mlp.*Pri_FullWireDia);
     [PriPerLayerMax,PPLMaxIndex] = max(Pri_PerLayer.*Pri_FullWireDia);
 
@@ -591,7 +591,6 @@ else
         y = zeros(1,43);
         return
     end
-
 
     Index_Meet_All = B_index;
     Index_Meet_All = intersect(Index_Meet_All, P_loss_index);
