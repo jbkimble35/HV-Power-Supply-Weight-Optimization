@@ -1,61 +1,28 @@
 clc, clf, clear all 
 close all
 
+
+
+% TO DO
+
+% Add interlayer tape to inductor
+% Find out why mu is a fixed value
+% Get tables of some results
+% Make the scripts more user-friendly i.e. looking nice
+
+% DO NOT GET OVERLY OBSESSED AND CONTINUE BEYOND THIS!!! ACCEPT RESULTS AND
+% MOVE ON TO ANOTHER PROJECT!!!! 
+% Accept the values that the script is giving, just try and make certain
+% they make plausible sense by building one
+
+
 % Inductor and Transformer Test Table is given in TestTableIndXfmer.xlsx
 
-%{
-Notes:
-What is done here:
-
-- Sweeping core size, core material, wire build, and winding pattern.
-Electrical, thermal, and mechanical parameters of each design are
-calculated. 
-    - Electrical:Max flux density, inductance of the inductor, magnetizing
-        impedance of the transformer.
-    - Thermal: Core loss (Steinmetz), copper loss (Dowell), absolute
-    temperature
-    - Physical: Packing factor (insulation), winding width and height
-
-Rule out designs with constraints: (Examples below)
-    - Max flux density >= 0.75*BSAT
-    - Max temp >= 90 degC
-    - Total loss 2% for inductors, 5% for transformers
-    - Overall Packing factor >= 0.7,
-    - Windings must fit in window height and width
-
-Once satisfied, weight must be calculated:
-    - Core
-    - Wire Copper
-    - Wire insulation
-    - Core insulation
-
-Lightest design is selected
+% I don't think mu should be a fixed value, it should be calculated
+% depending on inductance factor of the core, effective cross section of
+% core, magnetic path length, and permeability of free space. 
 
 
-Transformer:
-    - The core should account for 50% of the weight,
-    with the other 50% taken up by the copper.
-    - Current density of the secondary is usually smaller
-    than the rule-of-thumb 500A/cm^3.
-    - Core loss %: core loss % corresponds to less current
-    density in the wire
-    - 
-
-%}
-
-
-% Ensure the excel files are not open elsewhere, or else
-% you will get an error:
-% "Unable to open file 'path' as
-% a workbook. Check that the file exists,..."
-
-% If your variables are too restrictive for your data, you will get
-% a table with no values, as no set of variables match your requirements
-
-% I believe that at high frequencies and high powers, the core losses will
-% be high no matter what with not many high core size options,
-% and it's not a controllable factor to some extent. If you input high 
-% power and/or low frequency, you will get low efficiency.
 
 corelossfile = 'CoreLossData.xlsx';
 raw1 = readcell('CoreLossData.xlsx','Sheet','Freq');
@@ -74,26 +41,26 @@ raw = readcell('CoreSizeData.xlsx','Sheet','ReviewedCores');
 
 Date = '9_22_25';
 % Quality factor
-Q_range = 0.5:0.1:2;
+Q_range = 1:0.1:2;
 % Resonant frequency
 f0_range = 100000;
 % Capacitance ratio
-A_range = 0.05:0.05:0.5;
+A_range = 0.05:0.01:0.1;
 % Turns ratio
-K_range = [12,13];
+K_range = 20;
 % DC input voltage range (unipolar peak) (if Vppeak is the param. to select around,
 % keep GT ~1, but optimal weight is usually achieved with tank gain of ~2)
-Vin_range = 800;
+Vin_range = 500;
 % Peak of the output voltage that one hope to achieve (V)
 % peak to peak is 2x this value
 Vo_range = 10000;
 % Output power desired (W)
-Po_range = 500;
+Po_range = 1000;
 % frequency of the transformer
 fs_range = 100000;
 
 % Winding Pattern index: 1 indicates center leg winding, 2 indicates double
-Winding_Pattern = 1;
+Winding_Pattern = 2;
 % Hypothesis: record why you want to run the sim
 Hypothesis ='';
 % Notes: record any changes you made to the code
