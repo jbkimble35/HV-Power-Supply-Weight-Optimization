@@ -38,6 +38,47 @@ I want to add a plotting option for all of the candidate designs to a few graphs
 - Import Voltage Multiplier weight scripts
 - Create a way to scrape coresize datasheets online for core geometry dimensions, or just to scrape the PDFs for the correct values.
 
+## Summary
+
+### Sweeps input parameters, core size, core material, wire build, and winding pattern.
+- Electrical, thermal, and mechanical parameters of each design are calculated. 
+    - Electrical: Max flux density, inductance of the inductor, magnetizing impedance of the transformer.
+    - Thermal: Core loss (Steinmetz), copper loss (Dowell), absolute temperature
+    - Physical: Packing factor (insulation), winding width and height, interlayer tape, winding arrangement
+
+### Rules out designs with constraints: (With Examples)
+   - Max flux density >= 0.75*BSAT
+   - Max temp >= 90 degC
+   - Total loss 2% for inductors, 5% for transformers
+   - Overall Packing factor >= 0.7,
+   - Windings must fit in window height and width
+   - Weight must be less than specified max
+   - Layers and windings per layer must be less than max specified
+   - Airgap must be greater than minimum
+
+### Once satisfied, weight must be calculated:
+   - Core
+   - Wire Copper
+   - Wire insulation
+   - Core insulation
+   - Interlayer Tape
+
+### Weight rules of thumb for transformer & inductor:
+   - The core should account for 50% of the weight,
+   with the other 50% taken up by the copper.
+   - Current density of the secondary is usually smaller
+   than the rule-of-thumb 500A/cm^3.
+   - Core loss %: core loss % corresponds to less current
+   density in the wire
+
+## Common Errors
+
+1. Ensure the excel files are not open elsewhere, or else you will get an error: 
+"Unable to open file 'path' as a workbook. Check that the file exists,..."
+
+2. If your variables are too restrictive for your data, you will get a table with
+no values, as no set of variables match your requirements
+
 ## Data formatting:
 
 You need to collect geometry and size data, as well as material-specific data.
