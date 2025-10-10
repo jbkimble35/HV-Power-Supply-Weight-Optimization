@@ -1,5 +1,6 @@
 clc, clear
 
+% Script only works for E cores for now
 % RTC test table is given in ComparisonTableRTC.xlsx
 
 global FBdata Result
@@ -7,7 +8,7 @@ global FBdata Result
 Date = '10-1-25';
 Vin_range = 170;
 % Peak amplitude of the secondary voltage that one hope to achieve (V)
-Vo_range = [362,363];
+Vo_range = 365;
 % Output power desired (W)
 Po_range = 45;
 % Winding Pattern Index: 1 inidcates center leg winding , 2 indicates double
@@ -20,14 +21,6 @@ Notes = 'xxx';
 PCBdensity = 0.0033; %g/mmmm
 TotalCap = 1; %uF
 
-filename = strcat (Date, '_' , 'RTC_inductor.xlsx');
-SheetNumber = 1;
-Infosheetname = strcat('SimInfo', num2str(SheetNumber));
-ResultDatasheetname = strcat( 'ResultsData' ,num2str(SheetNumber));
-FBinvertersheetname = strcat('FBData' ,num2str(SheetNumber));
-% RunNumber always starts with 1
-RunNumber = 1;
-
 % Read the core loss xlsx
 corelossfile = 'CoreLossData.xlsx';
 raw1 = readcell('CoreLossData.xlsx','Sheet','Freq');
@@ -39,16 +32,17 @@ raw6 = readcell('CoreLossData.xlsx','Sheet','Density');
 
 % Read the core size xlsx
 coresizefile = 'CoreSizeData.xlsx';
-raw = readcell('CoreSizeData.xlsx','Sheet','Ecore');
+% Ecore is the larger, perhaps inaccurate dataset, while ReviewedCores is a
+% manually vetted selection of cores
+raw = readcell('CoreSizeData.xlsx','Sheet','ReviewedCores');
 
 % Read the FET and CAP xlsx
 FETCapfile = 'MOSFETs and Capacitor Masses.xlsx';
 FETsheetname = 'Component Masses_FETs';
 CAPsheetname = 'Component Masses_Capacitors';
 
-
 rawFET = readcell(FETCapfile,'Sheet',FETsheetname);
-[m1,n1] = size(rawFET);
+[~,~] = size(rawFET);
 ColumnName = rawFET(1,:);
 
 Vsw_term = 'voltage rating';  % V
@@ -56,10 +50,10 @@ Isw_term = 'current rating';  % A
 Wsw_term = 'avg. mass (g)';    % g
 Asw_term = 'Area (mm^2)';            % nm2
 
-Wsw = cell2mat(rawFET(2:end, find(ismember(ColumnName, Wsw_term))));
-Isw = cell2mat(rawFET(2:end, find(ismember(ColumnName, Isw_term))));
-Vsw = cell2mat(rawFET(2:end, find(ismember(ColumnName, Vsw_term))));
-Asw = cell2mat(rawFET(2:end, find(ismember(ColumnName, Asw_term))));
+Wsw = cell2mat(rawFET(2:end, (ismember(ColumnName, Wsw_term))));
+Isw = cell2mat(rawFET(2:end, (ismember(ColumnName, Isw_term))));
+Vsw = cell2mat(rawFET(2:end, (ismember(ColumnName, Vsw_term))));
+Asw = cell2mat(rawFET(2:end, (ismember(ColumnName, Asw_term))));
 
 rawCAP = readcell(FETCapfile,'Sheet',CAPsheetname);
 [m1,n1] = size(rawCAP);
@@ -70,19 +64,19 @@ CAP_term = 'Capacitance (uF)';  % uF
 WCAP_term = 'Avg. mass (g)';  % g
 ACAP_term = 'Area (mm^2)';  % nm2
 
-WCAP = cell2mat(rawCAP(2:end, find(ismember(ColumnName, WCAP_term))));
-CAP = cell2mat(rawCAP(2:end, find(ismember(ColumnName, CAP_term))));
-VCAP = cell2mat(rawCAP(2:end, find(ismember(ColumnName, VCAP_term)))) * 1000;
-ACAP = cell2mat(rawCAP(2:end, find(ismember(ColumnName, ACAP_term))));
+WCAP = cell2mat(rawCAP(2:end, (ismember(ColumnName, WCAP_term))));
+CAP = cell2mat(rawCAP(2:end, (ismember(ColumnName, CAP_term))));
+VCAP = cell2mat(rawCAP(2:end, (ismember(ColumnName, VCAP_term)))) * 1000;
+ACAP = cell2mat(rawCAP(2:end, (ismember(ColumnName, ACAP_term))));
 
 % Processes each output voltage target
 %-----------------------------------------
 pcnt = 0.1;
 tic
 
-Result = zeros(length(Vo_range),33);
+Result = zeros(length(Vo_range),35);
 FBdata = zeros(1,6);
-for i = 1:length(Vo_range)
+for i = 1:1:length(Vo_range)
 
     % Per-stage output voltage chosen
     %---------------------------------
@@ -98,7 +92,7 @@ for i = 1:length(Vo_range)
         % Run the Ecore Design for 1 stage
 
         Succeed = Ecore_actualcore_E_Vectorize_Function_RTC( ...
-            Vin_range , G, Pa, Va, Winding_Pattern, ...
+            Vin_range , G, Pa, Winding_Pattern, ...
             raw,raw1,raw2,raw3,raw4,raw5,raw6);
         if Succeed(1,28)>Result(i,28)
             NumberOfCopies(i) = NumberOfStage;
@@ -147,6 +141,47 @@ for i = 1:length(Vo_range)
     end
 end
 
+%% File Output
+
+filename = strcat (Date, '_' , 'RTC_inductor.xlsx');
+SheetNumber = 1;
+Infosheetname = strcat('SimInfo', num2str(SheetNumber));
+ResultDatasheetname = strcat('ResultsData',num2str(SheetNumber));
+FBinvertersheetname = strcat('FBData',num2str(SheetNumber));
+% RunNumber always starts with 1
+RunNumber = 1;
+% File output configuration
+field1 = 'name';
+value1_req = {'Date','Hypothesis','Notes',...
+    'Vin_range(V)','G_range(V)','Po_range(W)',...
+    'Vo_range(V)','Winding_Pattern'};
+field2 = 'data';
+value2_req = {Date,Hypothesis, Notes,...
+    Vin_range,G,Po_range,Vo_range,...
+    Winding_Pattern};
+Requirement = struct(field1,value1_req,field2,value2_req);
+fn   = fieldnames(Requirement);
+vals = struct2cell(Requirement);
+
+% Places input variable ranges and values in sheet named "SimInfo"
+for i = 1:numel(vals)
+    v = vals{i};
+    if isnumeric(v) || islogical(v)
+        if isscalar(v), vals{i} = v; else, vals{i} = mat2str(v); end
+    elseif isstring(v) || ischar(v)
+        vals{i} = char(v);
+    else
+        vals{i} = jsonencode(v);
+    end
+end
+T = table(fn, vals, 'VariableNames', {'Field','Value'});
+writetable(T, filename, 'Sheet', Infosheetname, 'WriteVariableNames', true);
+
+blankTbl = cell2table(cell(0,1));
+blankTbl.Properties.VariableNames = {'_'};
+writetable(blankTbl, filename, 'Sheet', FBinvertersheetname, 'WriteVariableNames', false);
+writetable(blankTbl, filename, 'Sheet', ResultDatasheetname, 'WriteVariableNames', false);
+
 OutputTableFB = array2table(FBdata,'VariableNames',{'Number of Stages', ...
     'Min Switch Weight (g)','Min Capacitor Weight (g)','PCB Weight (g)' ...
     ,'1 Stage Weight (g)','Total Weight (g)'});
@@ -156,8 +191,8 @@ OutputTableFB = sortrows(OutputTableFB,'Total Weight (g)','ascend');
 
 FBcelX = readcell(filename,'Sheet',FBinvertersheetname);
 [row,col] = size(FBcelX);
-writecell(repmat({''},row,col),filename_xfmer,'Sheet',FBinvertersheetname);
-writetable(FBdata,filename,'Sheet',FBinvertersheetname);
+writecell(repmat({''},row,col),filename,'Sheet',FBinvertersheetname);
+writetable(OutputTableFB,filename,'Sheet',FBinvertersheetname);
 
 OutputTableL = array2table(Result, 'VariableNames', {'Po(W)', 'Vin(V)' , ...
     'Va(V)' , 'Vinsulation_ max (V)' , 'fs (Hz)' , 'matno',...
@@ -167,14 +202,16 @@ OutputTableL = array2table(Result, 'VariableNames', {'Po(W)', 'Vin(V)' , ...
     'WirePri_per_layer', 'WirePri_Nlayer','CopperPackingFactor' , ...
     'PackingFactor', 'LossCore(W)','LossCopper(W)' , 'WeightCore(g)', ...
     'WeightPri_copper (g)' , 'WeightPri_Insu(g)','WeightCore_Insu(g)', ...
-    'TotalWeight(g)', 'TempAbsolute(C)' , 'L' , 'airgap(m)','CoreIndex'});
+    'TotalWeight(g)', 'TempAbsolute(C)' , 'L' , 'airgap(m)','CoreIndex', ...
+    'Volume(m^3)','Core Shape Index'});
 arrL = table2array(OutputTableL);
 OutputTableL = OutputTableL(~all(arrL == 0, 2), :);
 OutputTableL = sortrows(OutputTableL,'TotalWeight(g)','ascend');
 
 LcelX = readcell(filename,'Sheet',ResultDatasheetname);
 [row,col] = size(LcelX);
-writecell(repmat({''},row,col),filename_xfmer,'Sheet',ResultDatasheetname);
+writecell(repmat({''},row,col),filename,'Sheet',ResultDatasheetname);
 writetable(OutputTableL, filename, 'Sheet', ResultDatasheetname);
+
 
 toc
