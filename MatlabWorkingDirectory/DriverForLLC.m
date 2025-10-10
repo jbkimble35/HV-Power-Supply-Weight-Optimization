@@ -10,8 +10,6 @@ close all
 % Get tables of some results
 % Make the scripts more user-friendly i.e. looking nice
 
-% DO NOT GET OVERLY OBSESSED AND CONTINUE BEYOND THIS!!! ACCEPT RESULTS AND
-% MOVE ON TO ANOTHER PROJECT!!!! 
 % Accept the values that the script is giving, just try and make certain
 % they make plausible sense by building one
 
