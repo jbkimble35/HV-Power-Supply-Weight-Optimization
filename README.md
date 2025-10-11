@@ -36,6 +36,12 @@ I want to add a plotting option for all of the candidate designs to a few graphs
 ## Future Work:
 - Import Voltage Multiplier weight scripts
 - Create a way to scrape coresize datasheets online for core geometry dimensions, or just to scrape the PDFs for the correct values.
+- Input core permeability data plots vs. frequency and temperature or through a plot digitizer instead of relying on the initial permeability. (Or use inductance factor of the core, or use complex permeability vs. frequency)
+- Input B-CL and B-H curve data at each frequency through plot digitization instead of interpolation with 2 points.
+- Compute inductor and transformer weights as a whole in the same script at once, and optimize for their coupled weight.
+- Add more core geometries and core materials.
+- Add U and UR cores geometries.
+- Add interlayer tape to inductor.
 
 ## Summary
 
