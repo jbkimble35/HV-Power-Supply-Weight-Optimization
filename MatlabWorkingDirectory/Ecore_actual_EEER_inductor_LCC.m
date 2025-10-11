@@ -1,10 +1,3 @@
-% This code is to design an inductor based on off-the-shelf cores
-% for certain sets of electrical requirements.
-% Assumptions:
-%   - Sine wave on the input and output
-%   - Model core loss using standard Steinmetz equation
-%   - Model copper loss with full Dowell equations
-
 function y = Ecore_actual_EEER_inductor_LCC(raw,raw1,raw2,raw3,raw4,raw5,raw6, ...
     Vin_range, G_range, Po_range, fs_range, Ls_range, Imax_range, Winding_Pattern, ...
     LCC_Q, LCC_f0, LCC_A, LCC_K, LCC_RT, LCC_Ls, LCC_Cs, LCC_Cp, LCC_GT) %#ok<INUSD>
@@ -28,7 +21,7 @@ WireInsulationDensity = 2.2*1000*1000; % TEFLON
 %-------------------------------------------
 
 % Lowest allowed inductor efficiency
-etaInductor = 0.98;
+etaInductor = 0.95;
 % Max allowable temperature (C)
 Tmax = 100;
 % Min allowable temperature (C)
@@ -36,7 +29,7 @@ Tmin = 25;
 % Maximum allowable weight (g)
 MaxWeight = 5000;
 % Air gap (m)
-mingap = 1e-6;
+mingap = 0;
 
 % Winding and Wire Parameters
 %------------------------------------------
@@ -102,7 +95,8 @@ LCorePloss   = cell2mat(raw3(2:m1,3:n1));
 LCoreBSAT = cell2mat(raw4(2:m1,3));
 % Only parses column C
 [m1,~]    = size(raw5);
-LCoreMU   = cell2mat(raw5(2:m1,3));
+LCoreInitialMU   = cell2mat(raw5(2:m1,3));
+
 [m1,~]    = size(raw6);
 CoreDensity   = cell2mat(raw6(2:m1,3))*1000000;
 
@@ -235,7 +229,8 @@ Vinsulation_max = Vin.*G;
 
 % Finds BSAT and relative permittivity for each candidate design, using matno_record
 % as the index deciding which material is assigned to which index.
-ui = LCoreMU(matno_record);
+ui = LCoreInitialMU(matno_record);
+
 BSAT = LCoreBSAT(matno_record);
 
 % ShuffleLcoreIndex is a very large column vector containing values of indices
@@ -281,7 +276,7 @@ KeepIndex = intersect(KeepAirGap, Keep_Bmindex);
 
 % NEW AIRGAP CHECK
 L_calc = u0.*Np.^2.*Ac.*ui./(Le + ui.*airgap);
-L_index = find(abs(L_calc - L)./L <= 0.05);
+L_index = find(abs(L_calc - L)./L <= 0.15);
 KeepIndex = intersect(KeepIndex, L_index);
 
 % Debug
@@ -326,9 +321,6 @@ matfs = F_atPv_500(matno_record,:) .* matfsIndex;
 % K1, alpha, and beta for the frequencies given by matfs. Then rowIdcs
 % stores the indices in the arrays that correspond to valid frequency
 % points.
-
-
-% removed 1000*
 K1 = K1_range(matno_record,:) .* matfsIndex*1000;
 alpha = alpha_range(matno_record,:) .* matfsIndex;
 beta = beta_range(matno_record,:) .* matfsIndex;
@@ -339,7 +331,6 @@ beta = beta_range(matno_record,:) .* matfsIndex;
 % i.e. how many frequencies per each material.
 [UniqueRowIdcs, ~] = unique(rowIdcs, 'rows');
 ColDuplicate = sum(matfs(UniqueRowIdcs,:) ~= 0, 2);
-
 
 % Repeat by the number of loss data of each design point
 Po                  = repelem(Po(UniqueRowIdcs), ColDuplicate);
@@ -576,7 +567,7 @@ else
         y = zeros(1,43);
         return
     end
-    if isempty(OverallPackingmin_index)
+    if isempty(OverallPackingmax_index)
         fprintf("Inductor Bottlenecked. Max packing factor out of all candidates: %.2f Index: %d",PackingMax,PackingMaxValIndex);
         y = zeros(1,43);
         return
