@@ -125,7 +125,7 @@ Freq is in Hz, Bfield is in T, Ploss is in mW/cm^3, BSAT is in T, MU is in H/m
 - Ploss: 2 loss values corresponding to B values, in mW/cm3
 - BSAT: design derates to 0.75 of value. Put one value in C per material
 - MU: material mu_r in column C
-- 
+
 Core loss data in CL provided in manufacturer datasheets 
 
 
