@@ -117,7 +117,7 @@ end
 [m1,~] = size(raw4);
 XCoreBSAT  = cell2mat(raw4(2:m1,3));
 [m1,~] = size(raw5);
-XCoreMU    = cell2mat(raw5(2:m1,3));
+XCoreInitialMU    = cell2mat(raw5(2:m1,3));
 [m1,~]    = size(raw6);
 CoreDensity   = cell2mat(raw6(2:m1,3))*1000000;
 
@@ -198,34 +198,6 @@ XcorePriH = cell2mat(raw(2:m1,9))/1000; % mm to m
 XcoreSecW = cell2mat(raw(2:m1,10))/1000; % mm to m
 XcoreSecH = cell2mat(raw(2:m1,11))/1000; % mm to m
 
-% PriW means primary winding width
-% PriH means primary winding height
-% SecW means secondary winding width
-% SecH means secondary winding height
-
-% If EE core:
-    % If center-leg winding pattern:
-        % PriW=Lc and PriH=T
-        % SecW=N/A and SecH=N/A
-    % If double-leg winding pattern:
-        % PriW=Lc and PriH=T
-        % SecW=0.5Lc and SecH=T
-
-% If ER core:
-    % If center-leg:
-        % PriW=2*rAc and PriH=N/A
-        % SecW and SecH N/A
-    % If double-leg:
-        % I don't think this is in the script
-
-% from the data given in the thesis, 
-
-
-
-% Lc is center-leg width
-% T is core thickness in EE/U cores
-% rAc is core radius in ER, UR cores.
-
 XcoreWindowW = cell2mat(raw(2:m1,12))/1000;
 XcoreWindowH = cell2mat(raw(2:m1,13))/1000;
 ShuffleIndex = 1:1:length(TransformerCoreIndex);
@@ -254,7 +226,7 @@ matno_record = reshape(matno_record,[],1);
 Np = reshape(Np,[],1);
 Mlp = reshape(Mlp,[],1);
 Mls = reshape(Mls,[],1);
-ui = XCoreMU(matno_record);
+ui = XCoreInitialMU(matno_record);
 BSAT = XCoreBSAT(matno_record);
 ShuffleXcoreIndex = reshape(ShuffleXcoreIndex,[],1);
 
@@ -376,7 +348,7 @@ alpha = nonzeros(reshape(alpha(UniqueRowIdcs,:)',[],1));
 
 % For the remaining indexes, compute the more detailed parameters 
 % like losses, size, subsequent weight
-% -------------------------------------
+% -----------------------------------------------------------------
 
 if (isempty(Po))
     y = 0;
@@ -395,7 +367,7 @@ else
     % -------------------------------------
 
     skindepth = 1./sqrt(pi*fs*u0/rou);
-    Ns = round(Np.*(Vspeak./Vppeak))+1;
+    Ns = ceil(Np.*(Vspeak./Vppeak));
     % Primary Current
     Iprms = (Po/etaXfmer)./(Vppeak/sqrt(2));
     Ippeak = Iprms*sqrt(2);
@@ -504,7 +476,7 @@ else
     isUR = (XcoreCoreShapeIndex == 4);
 
     switch Winding_Pattern
-        case 1 % -------- center leg --------
+        case 1 % center leg ----------------
             % Secondary turns per layer
             Sec_PerLayer = floor(Ns./Mls);
 
@@ -551,7 +523,7 @@ else
                 PriW(isUR)./2 + CoreInsulationThickness(isUR) ...
                 + 0.5.*( Mls(isUR).*Sec_FullWireDia(isUR) + tTapeSec(isUR) ) );
 
-        case 2 % -------- double leg --------
+        case 2 % double leg ----------------
             % Only consider half because symmetric
             Sec_PerLayer = floor(Ns./2./Mls);
 
@@ -806,7 +778,7 @@ else
         y = zeros(1,44);
         return
     end
-    if isempty(OverallPackingmin_index)
+    if isempty(OverallPackingmax_index)
         fprintf("Transformer Bottlenecked. Max packing factor out of all candidates: %.2f Index: %d",PackingMax,PackingMaxValIndex);
         y = zeros(1,44);
         return
