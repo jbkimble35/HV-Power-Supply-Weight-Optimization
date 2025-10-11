@@ -1,26 +1,4 @@
-clc, clf, clear all 
-close all
-
-
-
-% TO DO
-
-% Add interlayer tape to inductor
-% Find out why mu is a fixed value
-% Get tables of some results
-% Make the scripts more user-friendly i.e. looking nice
-
-% Accept the values that the script is giving, just try and make certain
-% they make plausible sense by building one
-
-
-% Inductor and Transformer Test Table is given in TestTableIndXfmer.xlsx
-
-% I don't think mu should be a fixed value, it should be calculated
-% depending on inductance factor of the core, effective cross section of
-% core, magnetic path length, and permeability of free space. 
-
-
+clc, clf, clear
 
 corelossfile = 'CoreLossData.xlsx';
 raw1 = readcell('CoreLossData.xlsx','Sheet','Freq');
@@ -36,35 +14,37 @@ coresizefile = 'CoreSizeData.xlsx';
 raw = readcell('CoreSizeData.xlsx','Sheet','ReviewedCores');
 
 %% Parameters to Adjust
+%--------------------------------------------------------------------------
 
 Date = '9_22_25';
 % Quality factor
-Q_range = 1:0.1:2;
+Q_range = 0.5:0.1:2;
 % Resonant frequency
-f0_range = 100000;
+f0_range = 10000;
 % Capacitance ratio
-A_range = 0.05:0.01:0.1;
+A_range = 0.1:0.1:2;
 % Turns ratio
-K_range = 20;
+K_range = 20:1:30;
 % DC input voltage range (unipolar peak) (if Vppeak is the param. to select around,
 % keep GT ~1, but optimal weight is usually achieved with tank gain of ~2)
-Vin_range = 500;
+Vin_range = 400;
 % Peak of the output voltage that one hope to achieve (V)
 % peak to peak is 2x this value
 Vo_range = 10000;
 % Output power desired (W)
 Po_range = 1000;
 % frequency of the transformer
-fs_range = 100000;
+fs_range = 10000;
 
 % Winding Pattern index: 1 indicates center leg winding, 2 indicates double
-Winding_Pattern = 2;
+Winding_Pattern = 1;
 % Hypothesis: record why you want to run the sim
 Hypothesis ='';
 % Notes: record any changes you made to the code
 Notes ='';
 
 %% File Output
+%-------------------------------------------------------------------------------
 
 % File output configuration
 filename_xfmer = strcat(Date,'_','Xfmer.xlsx');
@@ -100,6 +80,7 @@ T = table(fn, vals, 'VariableNames', {'Field','Value'});
 writetable(T, filename_xfmer, 'Sheet', Infosheetname, 'WriteVariableNames', true);
 
 %% Calculations
+%------------------------------------------------------------------------------
 
 % First, resonant tank parameters are calculated
 
@@ -154,6 +135,7 @@ Imax = Imax(KeepIndex);
 
 % Loops over every row of the 4-D grid, with tic-toc measuring total
 % runtime.
+%-------------------------------------------
 pcnt = 0.1;
 tic
 for i = 1:length(Q)
@@ -195,6 +177,9 @@ for i = 1:length(Q)
     end
 end
 toc
+
+% Results output
+%-------------------------------------------
 
 % Results for transformer and the column names are passed here.
 XfmerDesignTable = array2table(ResultX,'VariableNames',{'Po_W','Vppeak_V',...
