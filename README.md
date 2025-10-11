@@ -13,8 +13,6 @@ Below is the content directly from the thesis work:
 # HV Power Supply Weight Optimization (MatlabWorkingDirectory)
 This is a script modified from the 2020 thesis by Yiou He: "Towards High Voltage Power Conversion", that has been modified for expansion of datasets from the thesis info, as well as adding volume to the result table, fixing some issues with winding patterns and consistency across driver scripts, etc. The content was parsed with OCR from the original thesis PDF and then manually checked to remove errors, then manually edited to add or change specific sections. Comments were added to explain functions of much of the code for my own understanding.
 
-I want to add a plotting option for all of the candidate designs to a few graphs instead of a table, for visualization.
-
 ## Current issues I have identified: (delete as needed)
 - I'm not entirely sure why the relative permeability of each material is fixed, and where the numbers come from.
 -  Make the RTC script match the inductor and transformer design script so that every iteration of the loop writes to a row of the final design instead of to a global variable.
@@ -42,6 +40,7 @@ I want to add a plotting option for all of the candidate designs to a few graphs
 - Add more core geometries and core materials.
 - Add U and UR cores geometries.
 - Add interlayer tape to inductor.
+- I want to add a plotting option for all of the candidate designs to a few graphs instead of a table, for visualization.
 
 ## Summary
 
