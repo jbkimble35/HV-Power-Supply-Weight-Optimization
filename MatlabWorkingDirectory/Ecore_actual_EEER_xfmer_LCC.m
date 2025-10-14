@@ -12,7 +12,7 @@ function y = Ecore_actual_EEER_xfmer_LCC(raw,raw1,raw2,raw3,raw4,raw5,raw6, ...
 
 % Use interlayer tape instead of full wire jacket ratings?
 layerTapeUse = true;
-kaptonDielStrength = 0.5*200e6; % V/m derated 50%
+kaptonDielStrength = 0.5*200e5; % V/m derated 50%
 kaptonThickness = 60e-6; % m
 kaptonDensity = 1.42e6; % g/m^3
 enamelThickness = 60e-6;
@@ -23,7 +23,7 @@ cover_fac  = 1.05; % overlap of tape on other areas
 CoreInsulationDensity = 2.2e6;       % g/m^3 (Teflon)
 WireInsulationDensity = 2.2e6;       % g/m^3 (Teflon)
 % Dielectric strength of core insulation material (V/m) 50% derated
-dielectricstrength_insulation = 0.5 * 200e3 * 100;
+dielectricstrength_insulation = 0.5 * 200e5;
 
 
 % Transformer parameters
@@ -32,7 +32,7 @@ dielectricstrength_insulation = 0.5 * 200e3 * 100;
 % Minimum transformer efficiency
 etaXfmer = 0.95;
 % Max operating temp in Celsius
-Tmax = 100;
+Tmax = 90;
 % Min operating temp in Celsius
 Tmin = 25;
 % Minimum primary windings
@@ -50,7 +50,7 @@ MaxMls = 10;
 % Incremental layer of secondary winding
 IncreMls = 1;
 % Max allowable transformer weight (g)
-MaxWeight = 5000;
+MaxWeight = 10000;
 
 % Deratings
 %------------------------------------------
@@ -58,7 +58,7 @@ MaxWeight = 5000;
 % Saturation flux density derating
 BSAT_discount = 0.75;
 % Core loss multiplier
-CoreLossMultiple = 1.5;
+CoreLossMultiple = 1.0;
 maxpackingfactor = 0.7;
 minpackingfactor = 0.01;
 % Litz copper fill
@@ -76,16 +76,15 @@ u0 = 4*pi*1e-7;
 % Minimum secondary wire diameter (m)
 MinWireSize = 0.07874e-3;
 % Max allowable current density in wire, (A/m^2)
-Jwmax = 500*100*100;
+% 500A/cm^2 is the upper bound recommended, but without active cooling, and
+% since the magnetics are thermally insulated, less is assumed
+Jwmax = 3e6;
 % Minimal litz diameter (m)
 MinLitzDia = 0.07874e-3; % AWG40
 
 
 % Body of function
 %% --------------------------------------------------------------------------------------
-
-% Preallocate
-Design = zeros(1,44);
 
 [m1,n1] = size(raw1);
 XCoreMAT = raw1(2:m1,2); %#ok<NASGU>
@@ -286,7 +285,7 @@ end
 
 % Select Steinmetz params near each fs and expand design rows accordingly
 FsnoNonzero = F_atPv_500(matno_record,:) > 0;
-FsnoIndex = abs(fs - F_atPv_500(matno_record ,:))./fs <= 0.2; % 20% away is the 0.2
+FsnoIndex = abs(fs - F_atPv_500(matno_record ,:))./fs <= 0.4; % 40% away is the 0.4
 matfsIndex = FsnoNonzero.*FsnoIndex;
 matfs = F_atPv_500(matno_record,:).*matfsIndex;
 K1 = K1_range(matno_record,:).*matfsIndex*1000; %convert from mW/cm3 to W/m3
@@ -400,11 +399,12 @@ else
     dsolid_p=2.*sqrt(Areq_p./pi);                       % [m]
     dsolid_s=max(MinWireSize,2.*sqrt(Areq_s./pi));                       % [m]
     
-    useSolid_p=(dsolid_p<=skindepth);
-    useSolid_s=(dsolid_s<=skindepth);
+    useSolid_p=(dsolid_p<=2.*skindepth);
+    useSolid_s=(dsolid_s<=2.*skindepth);
     
+    % Computes for skindepth but not DC resistance...
     MinLitzDia = MinLitzDia*ones(length(skindepth),1);
-    dstrandMinlitz=max(MinLitzDia,skindepth);          % [m]
+    dstrandMinlitz=max(MinLitzDia,2.*skindepth);          % [m]
     AstrandMin=pi.*(dstrandMinlitz./2).^2;                   % [m^2]
     
     % Primary wire diameter, number of strands, and jacket+wire diameter
@@ -416,7 +416,7 @@ else
     Pri_WireDia=max(MinWireSize,dsolid_p);
     idx=~useSolid_p;
     if any(idx)
-        Pri_WireDia(idx)=2.*sqrt((Pri_Nstrands(idx).*AstrandMin(idx))./(pi.*LitzFactor));
+        Pri_WireDia(idx)=2.*sqrt(Pri_Nstrands(idx).*AstrandMin(idx).*LitzFactor./pi);
     end
     % Strand diameter
     Pri_ds=max(MinWireSize,dsolid_p);
@@ -435,7 +435,7 @@ else
     Sec_WireDia=max(MinWireSize,dsolid_s);
     idx=~useSolid_s;
     if any(idx)
-        Sec_WireDia(idx)=2.*sqrt((Sec_Nstrands(idx).*AstrandMin(idx))./(pi.*LitzFactor));
+        Sec_WireDia(idx)=2.*sqrt(Sec_Nstrands(idx).*AstrandMin(idx).*LitzFactor./pi);
     end
     % Strand diameter
     Sec_ds=max(MinWireSize,dsolid_s);
@@ -586,15 +586,16 @@ else
     %--------------------------------------------------------
 
     PriKlayer = sqrt(pi.*Pri_Nstrands).*Pri_ds./(2.*Pri_WireDia);
-    Pri_xp = Pri_ds./(2.*skindepth.*sqrt(pi.*PriKlayer));
+    Pri_xp = Pri_ds./(sqrt(pi.*PriKlayer).*2.*skindepth);
 
     SecKlayer = sqrt(pi.*Sec_Nstrands).*Sec_ds./(2.*Sec_WireDia);
-    Sec_xp = Sec_ds./(2.*skindepth.*sqrt(pi.*SecKlayer));
+    Sec_xp = Sec_ds./(sqrt(pi.*SecKlayer).*2.*skindepth);
 
     TLp = TLp';
     TLs = TLs';
-    Pri_Rdc = rou .* TLp ./ ( Pri_Nstrands .* (pi .* Pri_ds.^2 ./ 4) );
-    Sec_Rdc = rou .* TLs ./ ( Sec_Nstrands .* (pi .* Sec_ds.^2 ./ 4) );
+    % Fixed overestimation by litzfactor
+    Pri_Rdc = rou .* TLp ./ (pi.*dsolid_p.^2./4);
+    Sec_Rdc = rou .* TLs ./ (pi.*dsolid_s.^2./4);
     Pri_Fr = Pri_xp.*((sinh(2.*Pri_xp) + sin(2.*Pri_xp))./(cosh(2.*Pri_xp) - cos(2.* ...
         Pri_xp)) + 2.*(Mlp.^2.*Pri_Nstrands - 1)./3.*(sinh(Pri_xp) - sin(Pri_xp))./( ...
         cosh(Pri_xp) + cos(Pri_xp)));
@@ -755,32 +756,32 @@ else
 
     if isempty(P_loss_index)
         fprintf("Transformer Bottlenecked. Min Power loss out of all candidates: %.2f Index: %d",Pmin,PminValIndex);
-        y = zeros(1,44);
+        y = zeros(1,39);
         return
     end
     if isempty(Tafterloss_index)
         fprintf("Transformer Bottlenecked. Min T out of all candidates: %.2f Index: %d",Tminimum,TminValIndex);
-        y = zeros(1,44);
+        y = zeros(1,39);
         return
     end
     if isempty(B_index)
         fprintf("Transformer Bottlenecked. Min B out of all candidates: %.2f Index: %d",Bmin,BminIndex);
-        y = zeros(1,44);
+        y = zeros(1,39);
         return
     end
     if isempty(TotalWeight_index)
         fprintf("Transformer Bottlenecked. Min Weight out of all candidates: %.2f Index: %d",WMin,WminValIndex);
-        y = zeros(1,44);
+        y = zeros(1,39);
         return
     end
     if isempty(OverallPackingmin_index)
         fprintf("Transformer Bottlenecked. Min packing factor out of all candidates: %.2f Index: %d",PackingMin,PackingMinValIndex);
-        y = zeros(1,44);
+        y = zeros(1,39);
         return
     end
     if isempty(OverallPackingmax_index)
         fprintf("Transformer Bottlenecked. Max packing factor out of all candidates: %.2f Index: %d",PackingMax,PackingMaxValIndex);
-        y = zeros(1,44);
+        y = zeros(1,39);
         return
     end
 
@@ -855,7 +856,7 @@ else
 
     if isempty(WindowFit_index)
         fprintf("Transformer Bottlenecked. Max window area");
-        y = zeros(1,44);
+        y = zeros(1,39);
         return
     end
 
@@ -871,13 +872,13 @@ else
     Index_Meet_All = intersect(Index_Meet_All,WindowFit_index);
 
     % Sort by total weight and keep only the lightest one
-    [~,SortIndex] = sort(TotalWeight(Index_Meet_All));
+    % [~,SortIndex] = sort(TotalWeight(Index_Meet_All));
     
     % Build Results Table 
     %% -----------------------------------------------------------------------------
-    
+    [~, SortIndex] = sort(TotalWeight(Index_Meet_All));
     if(length(SortIndex) >= 1)
-        TotalWeightSortIndex = Index_Meet_All(SortIndex(1:1));
+        TotalWeightSortIndex = Index_Meet_All(SortIndex(1));
 
         V_cu     = ((WeightPri_copper+WeightSec_copper))/CopperDensity;
         V_insu   = ((WeightCore_Insu+WeightPri_Insu+WeightSec_Insu))/CoreInsulationDensity;
@@ -886,52 +887,47 @@ else
         Design(:, 1)  = Po(TotalWeightSortIndex);
         Design(:, 2)  = Vppeak(TotalWeightSortIndex);
         Design(:, 3)  = Vspeak(TotalWeightSortIndex);
-        Design(:, 4)  = Vinsulation_max(TotalWeightSortIndex);
-        Design(:, 5)  = fs(TotalWeightSortIndex);
-        Design(:, 6)  = matno_record(TotalWeightSortIndex);
-        Design(:, 7)  = matfs(TotalWeightSortIndex);
-        Design(:, 8)  = Ac(TotalWeightSortIndex);
-        Design(:, 9)  = H(TotalWeightSortIndex);
-        Design(:,10)  = W(TotalWeightSortIndex);
-        Design(:,11)  = Np(TotalWeightSortIndex);
-        Design(:,12)  = Ns(TotalWeightSortIndex);
-        Design(:,13)  = real_ratio(TotalWeightSortIndex);
-        Design(:,14)  = Bm(TotalWeightSortIndex);
-        Design(:,15)  = Pri_WireDia(TotalWeightSortIndex);
-        Design(:,16)  = Pri_FullWireDia(TotalWeightSortIndex);
-        Design(:,17)  = Sec_WireDia(TotalWeightSortIndex);
-        Design(:,18)  = Sec_FullWireDia(TotalWeightSortIndex);
-        Design(:,19) = Ippeak(TotalWeightSortIndex) ./ ...
-                       (pi * Pri_Nstrands(TotalWeightSortIndex) .* Pri_ds(TotalWeightSortIndex).^2 / 4);
-        Design(:,20) = Ispeak(TotalWeightSortIndex) ./ ...
-                       (pi * Sec_Nstrands(TotalWeightSortIndex) .* Sec_ds(TotalWeightSortIndex).^2 / 4);
-        Design(:,21) = Pri_Nstrands(TotalWeightSortIndex);
-        Design(:,22) = Sec_Nstrands(TotalWeightSortIndex);
-        Design(:,23) = Pri_PerLayer(TotalWeightSortIndex);
-        Design(:,24) = Mlp(TotalWeightSortIndex);
-        Design(:,25) = Sec_PerLayer(TotalWeightSortIndex);
-        Design(:,26) = Mls(TotalWeightSortIndex);
-        Design(:,27) = Ns_group1(TotalWeightSortIndex);
-        Design(:,28) = Ns_group2(TotalWeightSortIndex);
-        Design(:,29) = Ns_group3(TotalWeightSortIndex);
-        Design(:,30) = Ns_group4(TotalWeightSortIndex);
-        Design(:,31) = CopperPacking(TotalWeightSortIndex);
-        Design(:,32) = OverallPacking(TotalWeightSortIndex);
-        Design(:,33) = Pcore(TotalWeightSortIndex);
-        Design(:,34) = Pcopper(TotalWeightSortIndex);
-        Design(:,35) = Wcore(TotalWeightSortIndex);
-        Design(:,36) = WeightPri_copper(TotalWeightSortIndex);
-        Design(:,37) = WeightPri_Insu(TotalWeightSortIndex);
-        Design(:,38) = WeightSec_copper(TotalWeightSortIndex);
-        Design(:,39) = WeightSec_Insu(TotalWeightSortIndex);
-        Design(:,40) = WeightCore_Insu(TotalWeightSortIndex);
-        Design(:,41) = TotalWeight(TotalWeightSortIndex);
-        Design(:,42) = Tafterloss(TotalWeightSortIndex);
-        Design(:,43) = XcoreIndex(TotalWeightSortIndex);
-        Design(:,44) = Volume_m3(TotalWeightSortIndex);
+        Design(:, 4)  = fs(TotalWeightSortIndex);
+        Design(:, 5)  = matno_record(TotalWeightSortIndex);
+        Design(:, 6)  = matfs(TotalWeightSortIndex);
+        Design(:, 7)  = Np(TotalWeightSortIndex);
+        Design(:, 8)  = Ns(TotalWeightSortIndex);
+        Design(:, 9)  = Bm(TotalWeightSortIndex);
+        Design(:,10)  = Pri_WireDia(TotalWeightSortIndex);
+        Design(:,11)  = Pri_FullWireDia(TotalWeightSortIndex);
+        Design(:,12)  = Sec_WireDia(TotalWeightSortIndex);
+        Design(:,13)  = Sec_FullWireDia(TotalWeightSortIndex);
+        Design(:,14)  = Ippeak(TotalWeightSortIndex) ./ ...
+                        (pi * Pri_Nstrands(TotalWeightSortIndex) .* Pri_ds(TotalWeightSortIndex).^2 / 4);
+        Design(:,15)  = Ispeak(TotalWeightSortIndex) ./ ...
+                        (pi * Sec_Nstrands(TotalWeightSortIndex) .* Sec_ds(TotalWeightSortIndex).^2 / 4);
+        Design(:,16)  = Pri_Nstrands(TotalWeightSortIndex);
+        Design(:,17)  = Sec_Nstrands(TotalWeightSortIndex);
+        Design(:,18)  = Pri_PerLayer(TotalWeightSortIndex);
+        Design(:,19)  = Mlp(TotalWeightSortIndex);
+        Design(:,20)  = Sec_PerLayer(TotalWeightSortIndex);
+        Design(:,21)  = Mls(TotalWeightSortIndex);
+        Design(:,22)  = Ns_group1(TotalWeightSortIndex);
+        Design(:,23)  = Ns_group2(TotalWeightSortIndex);
+        Design(:,24)  = Ns_group3(TotalWeightSortIndex);
+        Design(:,25)  = Ns_group4(TotalWeightSortIndex);
+        Design(:,26)  = CopperPacking(TotalWeightSortIndex);
+        Design(:,27)  = OverallPacking(TotalWeightSortIndex);
+        Design(:,28)  = Pcore(TotalWeightSortIndex);
+        Design(:,29)  = Pcopper(TotalWeightSortIndex);
+        Design(:,30)  = Wcore(TotalWeightSortIndex);
+        Design(:,31)  = WeightPri_copper(TotalWeightSortIndex);
+        Design(:,32)  = WeightPri_Insu(TotalWeightSortIndex);
+        Design(:,33)  = WeightSec_copper(TotalWeightSortIndex);
+        Design(:,34)  = WeightSec_Insu(TotalWeightSortIndex);
+        Design(:,35)  = WeightCore_Insu(TotalWeightSortIndex);
+        Design(:,36)  = TotalWeight(TotalWeightSortIndex);
+        Design(:,37)  = Tafterloss(TotalWeightSortIndex);
+        Design(:,38)  = XcoreIndex(TotalWeightSortIndex);
+        Design(:,39)  = Volume_m3(TotalWeightSortIndex);
         y = Design;
     else
-        y = zeros(1,44);
+        y = zeros(1,39);
         disp('Requirements not met. Filtered indexes == 0');
     end
 end
