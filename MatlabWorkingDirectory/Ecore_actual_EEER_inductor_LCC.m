@@ -1,6 +1,6 @@
 function y = Ecore_actual_EEER_inductor_LCC(raw,raw1,raw2,raw3,raw4,raw5,raw6, ...
     Vin_range, G_range, Po_range, fs_range, Ls_range, Imax_range, Winding_Pattern, ...
-    LCC_Q, LCC_f0, LCC_A, LCC_K, LCC_RT, LCC_Ls, LCC_Cs, LCC_Cp, LCC_GT) %#ok<INUSD>
+    LCC_Q, LCC_f0, LCC_A, LCC_K, LCC_RT, LCC_Ls, LCC_Cs, LCC_Cp, LCC_GT)
 
 % Tunable Parameters
 %% -------------------------------------------------------------------------------------
@@ -9,21 +9,28 @@ function y = Ecore_actual_EEER_inductor_LCC(raw,raw1,raw2,raw3,raw4,raw5,raw6, .
 %-------------------------------------------
 
 % Need to add interlayer tape
+layerTapeUse = true;
+enamelThickness = 60e-6;
+kaptonDielStrength = 0.5*200e5;
+kaptonThickness = 60e-6;
+MinTapeMargin = 5e-4;
+kaptonDensity = 1.42e6; % g/m^3
+cover_fac  = 1.05; % overlap of tape on other areas
 
 % Dielectric strength of the insulation material (V/m), discount 50%
-dielectricstrength_insulation = 0.5 * 200 * 1000 * 100; % TEFLON
+dielectricstrength_insulation = 0.5 * 200e5; % TEFLON
 % g/m^3, density of core insulation materials
-CoreInsulationDensity = 2.2*1000*1000; % TEFLON
+CoreInsulationDensity = 2.2e6; % TEFLON
 % g/m^3, density of wire insulation materials
-WireInsulationDensity = 2.2*1000*1000; % TEFLON
+WireInsulationDensity = 2.2e6; % TEFLON
 
 % Inductor parameters
 %-------------------------------------------
 
 % Lowest allowed inductor efficiency
-etaInductor = 0.95;
+etaInductor = 0.98;
 % Max allowable temperature (C)
-Tmax = 100;
+Tmax = 90;
 % Min allowable temperature (C)
 Tmin = 25;
 % Maximum allowable weight (g)
@@ -41,7 +48,7 @@ MaxWinding = 100;
 % Incremental winding
 IncreN = 1;
 % Maximum layer of winding
-MaxMl = 12;
+MaxMl = 5;
 % Incremental layers. The layers of a transformer reference each wrap of
 % turns that fills the window height before moving on to the next level.
 % Once one layer fills, the next layer is wound on top, seperated by an
@@ -50,11 +57,15 @@ IncreMl = 1;
 % Minimal wire diameter (m)
 MinWireDia = 0.079/1000; % AWG28, 0.35 mm is AWG29, 0.079 is AWG40
 % Max allowable current density in the wire (A/m^2)
-Jwmax = 500 * 100 * 100;
+% 500A/cm^2 is the upper bound recommended, but without active cooling, and
+% since the magnetics are thermally insulated, less is assumed
+Jwmax = 3e6;
 % Minimal litz diameter one can get (m)
 MinLitzDia = 0.05024 / 1000; % AWG44 % 0.0316 is AWG48, 0.03983 is AWG46
 % g/m^3, density of copper
 CopperDensity = 8.96*1000*1000;
+% Copper wire multiple to reduce resistive losses
+CuMult = 1;
 
 % Discount factors
 %----------------------------------------
@@ -62,7 +73,7 @@ CopperDensity = 8.96*1000*1000;
 % Bmax discount factor
 BSAT_discount = 0.75;
 % Actual core loss is always higher than the calculated
-CoreLossMultiple = 1.5;
+CoreLossMultiple = 1.0;
 % Maximum packing factor (copper area compared with total window area)
 maxpackingfactor = 0.7;
 % Minimum packing factor
@@ -145,7 +156,7 @@ for i = 1:1:NoMat
 
         % This checks if material data is 0.X away from the desired
         % frequency, and if it is, FreqFlag is raised for that material.
-        if (abs(fs_range - F_atPv_500(i,j))/fs_range <= 0.2)
+        if (abs(fs_range - F_atPv_500(i,j))/fs_range <= 0.4)
             FreqFlag(i) = 1;
         end
 
@@ -255,9 +266,9 @@ L       = Ls;
 % Effective air gap length based on the magnetic circuit relation between
 % inductance, turns, effective length, cross-sectional area, etc.
 
-airgap = u0.*Ac.*Np.^2./L - Le./ui;
+airgap = u0.*Ac.*Np.^2./L-Le./ui;
 % Eliminate unrealistic elements: require a feasible min gap
-KeepAirGap = intersect(find(airgap >= mingap), find(airgap <= 0.2.*Le));
+KeepAirGap = intersect(find(airgap>=mingap), find(airgap<=0.2*Le));
 
 % Safety check for air gaps. If the computed air gap is negative, it means
 % the inductance isn't enough.
@@ -275,14 +286,14 @@ Keep_Bmindex = find(Bm_dummy < BSAT*BSAT_discount);
 KeepIndex = intersect(KeepAirGap, Keep_Bmindex);
 
 % NEW AIRGAP CHECK
-L_calc = u0.*Np.^2.*Ac.*ui./(Le + ui.*airgap);
-L_index = find(abs(L_calc - L)./L <= 0.15);
-KeepIndex = intersect(KeepIndex, L_index);
+%L_calc = u0.*Np.^2.*Ac.*ui./(Le + ui.*airgap);
+%L_index = find(abs(L_calc - L)./L <= 0.15);
+%KeepIndex = intersect(KeepIndex, L_index);
 
 % Debug
 if isempty(KeepIndex)
     warning('No Successful Indexes');
-    y = zeros(1,43);
+    y = zeros(1,37);
     return;
 end
 
@@ -310,21 +321,21 @@ airgap             = airgap(KeepIndex);
 LcoreIndex         = LcoreIndex(KeepIndex);
 LcoreCoreShapeIndex= LcoreCoreShapeIndex(KeepIndex);
 
-% Filters out <=0 core loss at all frequencies, material frequencies >20% away from fs,
+% Filters out <=0 core loss at all frequencies, material frequencies >40% away from fs,
 % and updates candidate frequency points into matfs.
-FsnoNonzero = F_atPv_500(matno_record,:) > 0;
-FsnoIndex = abs(fs - F_atPv_500(matno_record,:)) ./ fs <= 0.2;
-matfsIndex = FsnoNonzero .* FsnoIndex;
-matfs = F_atPv_500(matno_record,:) .* matfsIndex;
+FsnoNonzero = F_atPv_500(matno_record,:)>0;
+FsnoIndex = abs(fs-F_atPv_500(matno_record,:))./fs<=0.4;
+matfsIndex = FsnoNonzero.*FsnoIndex;
+matfs = F_atPv_500(matno_record,:).*matfsIndex;
 
 % Converts K1 from mW/cm3 to W/m3 and builds core-loss steinmetz parameters
 % K1, alpha, and beta for the frequencies given by matfs. Then rowIdcs
 % stores the indices in the arrays that correspond to valid frequency
 % points.
-K1 = K1_range(matno_record,:) .* matfsIndex*1000;
-alpha = alpha_range(matno_record,:) .* matfsIndex;
-beta = beta_range(matno_record,:) .* matfsIndex;
-[rowIdcs, ~] = find(matfs > 0);
+K1 = K1_range(matno_record,:).*matfsIndex*1000;
+alpha = alpha_range(matno_record,:).*matfsIndex;
+beta = beta_range(matno_record,:).*matfsIndex;
+[rowIdcs, ~] = find(matfs>0);
 
 % Finds the indices of unique values in rowIdcs, makes col vector where
 % each entry is "how many nonzero freq.s exist in a given row of matfs"
@@ -376,20 +387,18 @@ else
     % Flux and core loss
     % -------------------------------------
 
-    ue = ui ./ (1 + ui .* airgap ./ Le);
+    ue = ui./(1+ui.*airgap./Le);
     Bm = u0.*Np.*Imax./Le.*ue;
 
     % Window area
-    Wa = H .* W;
+    Wa = H.*W;
 
     % Core weight (g)
     Wcore = Ve.*CoreDensity(matno_record);
 
     % Check core loss
-    Pcore = CoreLossMultiple .* Ve .* K1 .* fs.^alpha .* Bm.^beta;
+    Pcore = CoreLossMultiple.*Ve.*K1.*fs.^alpha.*Bm.^beta;
 
-    % Turns per layer
-    Pri_PerLayer = floor(Np./Mlp);
     % Preallocate
     TLp = zeros(size(Np));
 
@@ -401,13 +410,13 @@ else
     % AC skin depth
     skindepth=1./sqrt(pi.*fs.*u0./rou);
     % Area required of wire m^2
-    Areq_p=Iprms./Jwmax;
+    Areq_p=CuMult.*Iprms./Jwmax;
     % solid equivalent diameter
     dsolid=2.*sqrt(Areq_p./pi);
     % Solid vs. litz
-    useSolid=dsolid<=skindepth;
+    useSolid=dsolid<=2.*skindepth;
     % Litz diameter
-    dstrand_litz=max(MinLitzDia,skindepth);
+    dstrand_litz=max(MinLitzDia,2.*skindepth);
     % strand cross section area
     Astrand=pi.*(dstrand_litz./2).^2;
     % Number of strands default to 1
@@ -418,14 +427,17 @@ else
     Pri_WireDia=max(MinWireDia,dsolid);
     idLitz=~useSolid;
     if any(idLitz)
-        Pri_WireDia(idLitz)=2.*sqrt((Pri_Nstrands(idLitz).*Astrand(idLitz))./(pi.*LitzFactor));
+        Pri_WireDia(idLitz)=2.*sqrt(Pri_Nstrands(idLitz).*Astrand(idLitz).*LitzFactor./pi);
     end
     
     % Strand diameter
     Pri_ds=max(MinWireDia,dsolid);
     Pri_ds(idLitz)=dstrand_litz(idLitz);
     % Full wire size with insulation
-    Pri_FullWireDia=Pri_WireDia+2.*(Vpri./dielectricstrength_insulation);
+    Pri_FullWireDia=Pri_WireDia+2.*Vpri./dielectricstrength_insulation;
+    if layerTapeUse
+        Pri_FullWireDia = Pri_WireDia + enamelThickness.*2;
+    end
 
     A_pri_cu=(pi.*(Pri_WireDia.^2))./4;
     A_pri_full=(pi.*(Pri_FullWireDia.^2))./4;
@@ -439,15 +451,39 @@ else
     % and winding pattern
     %-----------------------------------------------------------------------------
 
+    % Turns per layer
+    Pri_PerLayer = floor(Np./Mlp);
+
+    if layerTapeUse
+        numTapePerLayerPri = ceil((Vpri./Mlp)./(kaptonDielStrength*kaptonThickness));
+        tTapePri = max(Mlp-1,0).*numTapePerLayerPri.*kaptonThickness;
+    else
+        numTapePerLayerPri = zeros(size(Mlp));
+        tTapePri = zeros(size(Mlp));
+    end
+
     isEE=(LcoreCoreShapeIndex==1);
     isER=(LcoreCoreShapeIndex==2);
     isU=(LcoreCoreShapeIndex==3);
     isUR=(LcoreCoreShapeIndex==4);
     
-    TLp(isEE)=Np(isEE).*2.*(PriW(isEE)+PriH(isEE)+4.*CoreInsulationThickness(isEE));
-    TLp(isER)=2.*pi.*Np(isER).*(PriW(isER)./2+CoreInsulationThickness(isER));
-    TLp(isU)=2.*Np(isU).*(PriW(isU)+PriH(isU)+4.*CoreInsulationThickness(isU));
-    TLp(isUR)=2.*pi.*Np(isUR).*(PriW(isUR)./2+CoreInsulationThickness(isUR));
+    if Winding_Pattern==1
+        TLp(isEE|isU)=2.*Np(isEE|isU).*(PriW(isEE|isU)+PriH(isEE|isU)+ ...
+            4.*CoreInsulationThickness(isEE|isU)+2.*tTapePri(isEE|isU)+ ...
+            2.*Mlp(isEE|isU).*Pri_FullWireDia(isEE|isU));
+        TLp(isER|isUR)=2.*pi.*Np(isER|isUR).*(PriW(isER|isUR)./2+ ...
+            CoreInsulationThickness(isER|isUR)+0.5.*tTapePri(isER|isUR)+ ...
+            0.5.*Mlp(isER|isUR).*Pri_FullWireDia(isER|isUR));
+    end
+
+    if Winding_Pattern==2
+        TLp(isEE|isU)=2.*Np(isEE|isU).*(PriW(isEE|isU)+PriH(isEE|isU)+ ...
+            4.*CoreInsulationThickness(isEE|isU)+2.*tTapePri(isEE|isU)+ ...
+            2.*Mlp(isEE|isU).*Pri_FullWireDia(isEE|isU));
+        TLp(isER|isUR)=2.*pi.*Np(isER|isUR).*(PriW(isER|isUR)./2+ ...
+            CoreInsulationThickness(isER|isUR)+0.5.*tTapePri(isER|isUR)+ ...
+            0.5.*Mlp(isER|isUR).*Pri_FullWireDia(isER|isUR));
+    end
 
     Mlp_index=find((Mlp.*Pri_FullWireDia)<=(W-2.*CoreInsulationThickness));
     Pri_PerLayer_index=find((Pri_PerLayer.*Pri_FullWireDia)<=(H-2.*CoreInsulationThickness));
@@ -456,15 +492,16 @@ else
     %--------------------------------------------------------
 
     PriKlayer=sqrt(pi.*Pri_Nstrands).*Pri_ds./(2.*Pri_WireDia);
-    Pri_xp=Pri_ds./(2.*skindepth.*sqrt(pi.*PriKlayer));
+    Pri_xp=Pri_ds./(sqrt(pi.*PriKlayer).*2.*skindepth);
 
-    Pri_Rdc = rou.*TLp./(Pri_Nstrands.*(pi.*(Pri_ds.^2)./4));
+    % Fixed overestimation by litzfactor
+    Pri_Rdc = rou.*TLp./(pi.*dsolid.^2./4);
     Pri_Fr=Pri_xp.*((sinh(2.*Pri_xp)+sin(2.*Pri_xp))./(cosh(2.*Pri_xp)-cos(2.*Pri_xp))+2.* ...
-        ((Mlp.^2.*Pri_Nstrands)-1)./3.*((sinh(Pri_xp)-sin(Pri_xp))./(cosh(Pri_xp)+cos(Pri_xp))));
+        (Mlp.^2.*Pri_Nstrands-1)./3.*(sinh(Pri_xp)-sin(Pri_xp))./(cosh(Pri_xp)+cos(Pri_xp)));
     Pri_Rac=Pri_Rdc.*Pri_Fr;
     Pcopper=Iprms.^2.*Pri_Rac;
 
-    Rth=16.31e-3.*((Ac.*Wa).^(-0.405));
+    Rth=16.31e-3.*(Ac.*Wa).^(-0.405);
     Tafterloss=Rth.*(Pcopper+Pcore)+25;
 
     % Calculate the weight of core insulation
@@ -508,11 +545,44 @@ else
 
     WeightPri_copper = pi.*Pri_WireDia.^2./4.*TLp.*CopperDensity;
     WeightPri_Insu=(pi.*(Pri_FullWireDia.^2-Pri_WireDia.^2)./4).*TLp.*WireInsulationDensity;
+
+    % Interlayer Tape Weight
+    %---------------------------------------------
+
+    if ~layerTapeUse
+        Weight_InterlayerTape = zeros(size(Mlp));  % g
+        V_tape = zeros(size(Mlp)); % g
+        tapeMargin = 0;
+    else
+        tapeMargin = max(0.02*H, MinTapeMargin);
+        % total build incl. tape (for average circumference)
+        a1 = Mlp.*Pri_FullWireDia + max(Mlp-1,0).*numTapePerLayerPri.*kaptonThickness; % m
+    
+        % base per-turn length near inner radius
+        Lbase_p(isEE|isU)  = 2.*(PriW(isEE|isU) + PriH(isEE|isU) + 4.*CoreInsulationThickness(isEE|isU));
+        Lbase_p(isER|isUR) = 2.*pi.*(PriW(isER|isUR)./2 + CoreInsulationThickness(isER|isUR));
+
+        % average circumference of tape wraps
+        Lavg_il_p = Lbase_p + pi.*(a1./2);
+    
+        % number of inter-layer boundaries
+        nBndPri = max(Mlp-1,0);
+    
+        % total tape length (all boundaries × plies × overlap factor)
+        L_tape_total = cover_fac.*(nBndPri.*numTapePerLayerPri.*Lavg_il_p); % m
+    
+        % tape width and volume
+        w_tape = H+2.*tapeMargin;                 % m
+        V_tape = kaptonThickness.*w_tape.*L_tape_total;  % m^3
+    
+        % mass in grams (KaptonDensity in g/m^3)
+        Weight_InterlayerTape = kaptonDensity.*V_tape;  % g
+    end
         
     % Total weight
     %---------------------------------------------
 
-    TotalWeight=Wcore+WeightPri_copper+WeightPri_Insu+WeightCore_Insu;
+    TotalWeight=Wcore+WeightPri_copper+WeightPri_Insu+WeightCore_Insu+Weight_InterlayerTape;
 
     % Filter the designs
     %---------------------------------------------
@@ -533,6 +603,18 @@ else
     [WMin,WminValIndex] = min(TotalWeight);
 
     % Filter by packing factor min and max
+    if layerTapeUse
+        % might be incorrect due to approx. as H*t 
+        if Winding_Pattern == 2
+            CopperPacking = ((pi.*(Pri_WireDia.^2)./4).*Np) ./ ((H-2.*tapeMargin).*W);
+            OverallPacking = ( ((pi.*(Pri_FullWireDia.^2)./4).*Np) ...
+                + (H .* ( max(Mlp-1,0).*numTapePerLayerPri.*kaptonThickness )) ) ...
+                ./ ((H-2.*tapeMargin).*W);
+        else 
+            CopperPacking = ((pi.*(Pri_WireDia.^2)./4).*Np) ./ ((H-2.*tapeMargin).*W);
+            OverallPacking = ((pi.*(Pri_FullWireDia.^2)./4).*Np) ./ ((H-2.*tapeMargin).*W);
+        end
+    end
     OverallPackingmin_index = find(OverallPacking >= minpackingfactor);
     OverallPackingmax_index = find(OverallPacking <= maxpackingfactor);
     [PackingMin,PackingMinValIndex] = max(OverallPacking);
@@ -544,42 +626,42 @@ else
 
     if isempty(P_loss_index)
         fprintf("Inductor Bottlenecked. Min Power loss out of all candidates: %.2f Index: %d",Pmin,PminValIndex);
-        y = zeros(1,43);
+        y = zeros(1,37);
         return
     end
     if isempty(Tafterloss_index)
         fprintf("Inductor Bottlenecked. Min T out of all candidates: %.2f Index: %d",Tminimum,TminValIndex);
-        y = zeros(1,43);
+        y = zeros(1,37);
         return
     end
     if isempty(B_index)
         fprintf("Inductor Bottlenecked. Min B out of all candidates: %.2f Index: %d",Bmin,BminIndex);
-        y = zeros(1,43);
+        y = zeros(1,37);
         return
     end
     if isempty(TotalWeight_index)
         fprintf("Inductor Bottlenecked. Min Weight out of all candidates: %.2f Index: %d",WMin,WminValIndex);
-        y = zeros(1,43);
+        y = zeros(1,37);
         return
     end
     if isempty(OverallPackingmin_index)
         fprintf("Inductor Bottlenecked. Min packing factor out of all candidates: %.2f Index: %d",PackingMin,PackingMinValIndex);
-        y = zeros(1,43);
+        y = zeros(1,37);
         return
     end
     if isempty(OverallPackingmax_index)
         fprintf("Inductor Bottlenecked. Max packing factor out of all candidates: %.2f Index: %d",PackingMax,PackingMaxValIndex);
-        y = zeros(1,43);
+        y = zeros(1,37);
         return
     end
     if isempty(Mlp_index)
         fprintf("Inductor Bottlenecked. Max layers width of all candidates: %.2f Index: %d",MlpMax,MlpMaxValIndex);
-        y = zeros(1,43);
+        y = zeros(1,37);
         return
     end
     if isempty(Pri_PerLayer_index)
         fprintf("Inductor Bottlenecked. Max layer height out of all candidates: %.2f Index: %d",PriPerLayerMax,PPLMaxIndex);
-        y = zeros(1,43);
+        y = zeros(1,37);
         return
     end
 
@@ -607,55 +689,50 @@ else
            + WeightCore_Insu(TotalWeightSortIndex)./CoreInsulationDensity;
 
         % Preallocate Design_inductor
-        Design_inductor = zeros(numel(TotalWeightSortIndex), 43);
+        Design_inductor = zeros(numel(TotalWeightSortIndex), 37);
 
         Design_inductor(:, 1)  = Po(TotalWeightSortIndex);
         Design_inductor(:, 2)  = Vin(TotalWeightSortIndex);
         Design_inductor(:, 3)  = Vpri(TotalWeightSortIndex);
-        Design_inductor(:, 4)  = Vinsulation_max(TotalWeightSortIndex);
-        Design_inductor(:, 5)  = fs(TotalWeightSortIndex);
-        Design_inductor(:, 6)  = matno_record(TotalWeightSortIndex);
-        Design_inductor(:, 7)  = matfs(TotalWeightSortIndex);
-        Design_inductor(:, 8)  = PriW(TotalWeightSortIndex);
-        Design_inductor(:, 9)  = PriH(TotalWeightSortIndex);
-        Design_inductor(:,10)  = Ac(TotalWeightSortIndex);
-        Design_inductor(:,11)  = H(TotalWeightSortIndex);
-        Design_inductor(:,12)  = W(TotalWeightSortIndex);
-        Design_inductor(:,13)  = Np(TotalWeightSortIndex);
-        Design_inductor(:,14)  = Bm(TotalWeightSortIndex);
-        Design_inductor(:,15)  = Pri_WireDia(TotalWeightSortIndex);
-        Design_inductor(:,16)  = Pri_FullWireDia(TotalWeightSortIndex);
-        Design_inductor(:,17) = Imax(TotalWeightSortIndex) ./ ...
+        Design_inductor(:, 4)  = fs(TotalWeightSortIndex);
+        Design_inductor(:, 5)  = matno_record(TotalWeightSortIndex);
+        Design_inductor(:, 6)  = matfs(TotalWeightSortIndex);
+        Design_inductor(:, 7)  = Np(TotalWeightSortIndex);
+        Design_inductor(:, 8)  = Bm(TotalWeightSortIndex);
+        Design_inductor(:, 9)  = Pri_WireDia(TotalWeightSortIndex);
+        Design_inductor(:,10)  = Pri_FullWireDia(TotalWeightSortIndex);
+        Design_inductor(:,11)  = Imax(TotalWeightSortIndex) ./ ...
             (pi * Pri_Nstrands(TotalWeightSortIndex) .* Pri_ds(TotalWeightSortIndex).^2 / 4);
-        Design_inductor(:,18)  = Pri_Nstrands(TotalWeightSortIndex);
-        Design_inductor(:,19)  = Pri_PerLayer(TotalWeightSortIndex);
-        Design_inductor(:,20)  = Mlp(TotalWeightSortIndex);
-        Design_inductor(:,21)  = CopperPacking(TotalWeightSortIndex);
-        Design_inductor(:,22)  = OverallPacking(TotalWeightSortIndex);
-        Design_inductor(:,23)  = Pcore(TotalWeightSortIndex);
-        Design_inductor(:,24)  = Pcopper(TotalWeightSortIndex);
-        Design_inductor(:,25)  = Wcore(TotalWeightSortIndex);
-        Design_inductor(:,26)  = WeightPri_copper(TotalWeightSortIndex);
-        Design_inductor(:,27)  = WeightPri_Insu(TotalWeightSortIndex);
-        Design_inductor(:,28)  = WeightCore_Insu(TotalWeightSortIndex);
-        Design_inductor(:,29)  = TotalWeight(TotalWeightSortIndex);
-        Design_inductor(:,30)  = Tafterloss(TotalWeightSortIndex);
-        Design_inductor(:,31)  = L(TotalWeightSortIndex);
-        Design_inductor(:,32)  = airgap(TotalWeightSortIndex);
-        Design_inductor(:,33)  = LcoreIndex(TotalWeightSortIndex);
-        Design_inductor(:,34)  = LCC_Q  * ones(numel(TotalWeightSortIndex),1);
-        Design_inductor(:,35)  = LCC_f0 * ones(numel(TotalWeightSortIndex),1);
-        Design_inductor(:,36)  = LCC_A  * ones(numel(TotalWeightSortIndex),1);
-        Design_inductor(:,37)  = LCC_K  * ones(numel(TotalWeightSortIndex),1);
-        Design_inductor(:,38)  = LCC_RT * ones(numel(TotalWeightSortIndex),1);
-        Design_inductor(:,39)  = LCC_Ls * ones(numel(TotalWeightSortIndex),1);
-        Design_inductor(:,40)  = LCC_Cs * ones(numel(TotalWeightSortIndex),1);
-        Design_inductor(:,41)  = LCC_Cp * ones(numel(TotalWeightSortIndex),1);
-        Design_inductor(:,42)  = LCC_GT * ones(numel(TotalWeightSortIndex),1);
-        Design_inductor(:,43) = Volume;
+        Design_inductor(:,12)  = Pri_Nstrands(TotalWeightSortIndex);
+        Design_inductor(:,13)  = Pri_PerLayer(TotalWeightSortIndex);
+        Design_inductor(:,14)  = Mlp(TotalWeightSortIndex);
+        Design_inductor(:,15)  = CopperPacking(TotalWeightSortIndex);
+        Design_inductor(:,16)  = OverallPacking(TotalWeightSortIndex);
+        Design_inductor(:,17)  = Pcore(TotalWeightSortIndex);
+        Design_inductor(:,18)  = Pcopper(TotalWeightSortIndex);
+        Design_inductor(:,19)  = Wcore(TotalWeightSortIndex);
+        Design_inductor(:,20)  = WeightPri_copper(TotalWeightSortIndex);
+        Design_inductor(:,21)  = WeightPri_Insu(TotalWeightSortIndex);
+        Design_inductor(:,22)  = WeightCore_Insu(TotalWeightSortIndex);
+        Design_inductor(:,23)  = TotalWeight(TotalWeightSortIndex);
+        Design_inductor(:,24)  = Tafterloss(TotalWeightSortIndex);
+        Design_inductor(:,25)  = L(TotalWeightSortIndex);
+        Design_inductor(:,26)  = airgap(TotalWeightSortIndex);
+        Design_inductor(:,27)  = LcoreIndex(TotalWeightSortIndex);
+        Design_inductor(:,28)  = LCC_Q  * ones(numel(TotalWeightSortIndex),1);
+        Design_inductor(:,29)  = LCC_f0 * ones(numel(TotalWeightSortIndex),1);
+        Design_inductor(:,30)  = LCC_A  * ones(numel(TotalWeightSortIndex),1);
+        Design_inductor(:,31)  = LCC_K  * ones(numel(TotalWeightSortIndex),1);
+        Design_inductor(:,32)  = LCC_RT * ones(numel(TotalWeightSortIndex),1);
+        Design_inductor(:,33)  = LCC_Ls * ones(numel(TotalWeightSortIndex),1);
+        Design_inductor(:,34)  = LCC_Cs * ones(numel(TotalWeightSortIndex),1);
+        Design_inductor(:,35)  = LCC_Cp * ones(numel(TotalWeightSortIndex),1);
+        Design_inductor(:,36)  = LCC_GT * ones(numel(TotalWeightSortIndex),1);
+        Design_inductor(:,37)  = Volume;
+
         y = Design_inductor;
     else
-        y = zeros(1,43);
+        y = zeros(1,37);
         warning('No successful results Test2, Inductor');
     end
 end
