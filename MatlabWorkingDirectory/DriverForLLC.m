@@ -16,25 +16,26 @@ raw = readcell('CoreSizeData.xlsx','Sheet','ReviewedCores');
 %% Parameters to Adjust
 %--------------------------------------------------------------------------
 
-Date = '9_22_25';
+Date = '10-14-25';
 % Quality factor
-Q_range = 0.5:0.1:2;
+Q_range = 0.5:0.1:5;
 % Resonant frequency
-f0_range = 10000;
+f0_range = 200000;
 % Capacitance ratio
-A_range = 0.1:0.1:2;
-% Turns ratio
-K_range = 20:1:30;
+A_range = 0.1:0.1:0.3;
+% Turns ratio secondary/primary
+K_range = 50;
 % DC input voltage range (unipolar peak) (if Vppeak is the param. to select around,
 % keep GT ~1, but optimal weight is usually achieved with tank gain of ~2)
-Vin_range = 400;
+Vin_range = 200;
 % Peak of the output voltage that one hope to achieve (V)
 % peak to peak is 2x this value
 Vo_range = 10000;
 % Output power desired (W)
-Po_range = 1000;
+Po_range = 700;
 % frequency of the transformer
-fs_range = 10000;
+fs_range = 200000;
+
 
 % Winding Pattern index: 1 indicates center leg winding, 2 indicates double
 Winding_Pattern = 1;
@@ -99,8 +100,10 @@ K = reshape(K,[],1);
 % in A.^B must be equal or compatible. This allows for a large amount of
 % independent values to be computed in a compact format.
 
-% Resonant tank equivalent resistance, simply a constant divided by K^2.
-RT = 8/pi^2*40000^2/700/6/6./K.^2;
+% Equivalent resistance across secondary (from output p and output v)
+Req = (Vo_range./sqrt(2)).^2./Po_range;
+% Resonant tank reflected load resistance
+RT = Req./K.^2;
 % Series inductance of the resonant tank
 Ls = RT./(2*pi.*f0.*Q);
 % Series capacitance of LLC network
@@ -108,9 +111,9 @@ Cs = Q.*(A+1)./(A*2*pi.*f0.*RT);
 % Parallel capacitance of LLC network
 Cp = Q.*(A+1)./(2*pi.*f0.*RT);
 % Transfer function gain factor; small-signal tank gain
-GT = 4/pi./(sqrt((1+A).^2.*(1-(fs_range./f0).^2).^2+1./Q.^2.*(fs_range./f0-A.*f0./((A+1).*fs_range)).^2));
+GT = (4/pi)./(sqrt((1+A).^2.*(1-(fs_range./f0).^2).^2+1./Q.^2.*(fs_range./f0-A.*f0./((A+1).*fs_range)).^2));
 % Maximum current through resonant tank
-Imax = Vin_range.*GT./RT.*sqrt(1+(fs_range./f0).^2.*Q.^2.*(A+1).^2);
+Imax = (Vin_range.*GT./RT).*sqrt(1+(fs_range./f0).^2.*Q.^2.*(A+1).^2);
 
 % If effective gain GT.*K is within 20% of required gain, the design is
 % acceptable. If not, index ignored. If all are ignored, error is thrown.
@@ -183,10 +186,10 @@ toc
 
 % Results for transformer and the column names are passed here.
 XfmerDesignTable = array2table(ResultX,'VariableNames',{'Po_W','Vppeak_V',...
-    'Vspeak_V','Vinsulation_max_V', 'fs_Hz','matno','CoreMatFreq_Hz','CoreAc_m2',...
-    'CoreWindowH_m','CoreWindowW_m', 'NumOfPri','NumOfSec', 'RealConversion',...
+    'Vspeak_V','fs_Hz','matno','CoreMatFreq_Hz',...
+    'NumOfPri','NumOfSec',...
     'BcoreDensity_T','WirePriDia_m','WirePriFullDia_m','WireSecDia_m',...
-    'WireSecFullDia_m','WirePri_Idensity_Aperm2','WireSecIdensity_Aperm2',...
+    'WireSecFullDia_m','WirePri_Idensity_A/m2','WireSecIdensity_A/m2',...
     'WirePriNstrands','WireSecNstrands','WirePri_per_layer','WirePri_Nlayer',...
     'WireSec_per_layer', 'WireSec_Nlayer','Ns1','Ns2','Ns3','Ns4','CopperPackingFactor',...
     'PackingFactor', 'LossCore_W','LossCopper_W' , 'WeightCore_g','WeightPri_copper_g',...
@@ -198,6 +201,9 @@ XfmerDesignTable = XfmerDesignTable(~all(arrX == 0, 2), :);
 XfmerDesignTable = sortrows(XfmerDesignTable,"TotalWeight_g","ascend");
 % Results are written to excel file and sheet
 
+writecell({' '},filename_inductor,'Sheet',ResultDatasheetname);
+writecell({' '},filename_xfmer,'Sheet',ResultDatasheetname);
+
 xcelX = readcell(filename_xfmer,'Sheet',ResultDatasheetname);
 [row,col] = size(xcelX);
 writecell(repmat({''},row,col),filename_xfmer,'Sheet',ResultDatasheetname);
@@ -206,7 +212,7 @@ writetable(XfmerDesignTable,filename_xfmer,'Sheet',ResultDatasheetname);
 Xfinal = readcell(filename_xfmer,'Sheet',ResultDatasheetname);
 
 if size(Xfinal,1)>=2
-    weightX = Xfinal{2,41};
+    weightX = Xfinal{2,36};
 else
     weightX = 0;
 end
@@ -214,10 +220,9 @@ fprintf("Transformer Weight is %.2f g",weightX);
 
 % Results for inductor and the column names are passed here.
 InductorDesignTable = array2table(ResultL,'VariableNames',{'PoW','Vin_V',...
-    'Vpri_V', 'Vinsulation_max_V', 'fs_Hz','matno','CoreMatFreq_Hz',...
-    'CoreCenterLegL_m', 'CoreCenterLegT_m','CoreAc_m2','CoreWindowH_m',...
-    'CoreWindowW_m','NumOfPri','BcoreDensity_T','WirePriDia_m','WirePriFullDia_m',...
-    'WirePri_Idensity_Aperm2','WirePriNstrands','WirePri_per_layer','WirePri_Nlayer',...
+    'Vpri_V','fs_Hz','matno','CoreMatFreq_Hz','NumOfPri','BcoreDensity_T', ...
+    'WirePriDia_m','WirePriFullDia_m','WirePri_Idensity_Aperm2', ...
+    'WirePriNstrands','WirePri_per_layer','WirePri_Nlayer',...
     'CopperPackingFactor', 'PackingFactor','LossCore_W',...
     'LossCopper_W','WeightCore_g', 'WeightPri_copper_g','WeightPri_Insu_g',...
     'WeightCore_Insu_g','TotalWeight_g','TempAbsolute_C','L', 'airgap_m', 'CoreIndex',...
@@ -235,7 +240,7 @@ writetable(InductorDesignTable,filename_inductor,'Sheet',ResultDatasheetname);
 
 Lfinal = readcell(filename_inductor,'Sheet',ResultDatasheetname);
 if size(Lfinal,1)>=2
-    weightL = Lfinal{2,29};
+    weightL = Lfinal{2,23};
 else 
     weightL = 0;
 end
