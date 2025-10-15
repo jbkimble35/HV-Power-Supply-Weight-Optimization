@@ -39,8 +39,19 @@ This is a script modified from the 2020 thesis by Yiou He: "Towards High Voltage
 - Compute inductor and transformer weights as a whole in the same script at once, and optimize for their coupled weight.
 - Add more core geometries and core materials.
 - Add U and UR cores geometries.
-- Add interlayer tape to inductor.
 - I want to add a plotting option for all of the candidate designs to a few graphs instead of a table, for visualization.
+- To stop the constant parameter adjustment, I should have another for-loop 
+  that checks which parameter was the bottleneck, and expands it only then to
+  iterate until REAL hard bounds that cannot be surpassed. I'm thinking
+  things like winding number, incremental winding, Q, A, K, input voltage, etc.
+  should be SOFT requirements that can be expanded, and then things like
+  weight and temperature and freq and output voltage could be HARD
+  requirements that cannot be surpassed. Currently there are too many things
+  to change.
+
+I also think the script should iterate once for each winding pattern, and
+using interlayer tape or not, and possibly some other ranges. This would
+extend runtime, but would make user interfacing a lot easier.
 
 ## Summary
 
