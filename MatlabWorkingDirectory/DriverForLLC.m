@@ -18,11 +18,11 @@ raw = readcell('CoreSizeData.xlsx','Sheet','ReviewedCores');
 
 Date = '10-14-25';
 % Quality factor
-Q_range = 0.5:0.1:5;
+Q_range = 0.5:0.1:2;
 % Resonant frequency
 f0_range = 200000;
 % Capacitance ratio
-A_range = 0.1:0.1:0.3;
+A_range = 0.1;
 % Turns ratio secondary/primary
 K_range = 50;
 % DC input voltage range (unipolar peak) (if Vppeak is the param. to select around,
