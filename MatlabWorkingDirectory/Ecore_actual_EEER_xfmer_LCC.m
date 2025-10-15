@@ -30,23 +30,23 @@ dielectricstrength_insulation = 0.5 * 200e5;
 %-------------------------------------------
 
 % Minimum transformer efficiency
-etaXfmer = 0.95;
+etaXfmer = 0.90;
 % Max operating temp in Celsius
-Tmax = 90;
+Tmax = 100;
 % Min operating temp in Celsius
 Tmin = 25;
 % Minimum primary windings
 MinPriWinding = 1;
 % Maximum primary windings
-MaxPriWinding = 100;
+MaxPriWinding = 200;
 % Incremental primary winding
 IncreNp = 1;
 % Maximum layer of primary winding
-MaxMlp = 10;
+MaxMlp = 5;
 % Incremental layer of primary winding
 IncreMlp = 1;
 % Maximum layer of secondary winding
-MaxMls = 10;
+MaxMls = 20;
 % Incremental layer of secondary winding
 IncreMls = 1;
 % Max allowable transformer weight (g)
