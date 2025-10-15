@@ -83,6 +83,8 @@ This is a script modified from the 2020 thesis by Yiou He: "Towards High Voltage
 2. If your variables are too restrictive for your data, you will get a table with
 no values, as no set of variables match your requirements
 
+3. When running the script, if the weight seems implausibly high, check the results table for both inductor and transformer, and observe if any of the values in the table approach the bounds of the parameter ranges. If they do, expand those ranges. Often, expanding those ranges allows for more optimized cores. Once each of the parameters is in a good band within its range, the optimal design can be certain to have been achieved.
+
 ## Data formatting:
 
 You need to collect geometry and size data, as well as material-specific data.
