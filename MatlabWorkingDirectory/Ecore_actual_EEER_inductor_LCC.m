@@ -28,9 +28,9 @@ WireInsulationDensity = 2.2e6; % TEFLON
 %-------------------------------------------
 
 % Lowest allowed inductor efficiency
-etaInductor = 0.98;
+etaInductor = 0.9;
 % Max allowable temperature (C)
-Tmax = 90;
+Tmax = 100;
 % Min allowable temperature (C)
 Tmin = 25;
 % Maximum allowable weight (g)
@@ -44,7 +44,7 @@ mingap = 0;
 % Minimum turns
 MinWinding = 1;
 % Maximum turns
-MaxWinding = 100;
+MaxWinding = 200;
 % Incremental winding
 IncreN = 1;
 % Maximum layer of winding
