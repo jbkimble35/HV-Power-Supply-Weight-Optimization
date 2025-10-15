@@ -561,6 +561,7 @@ else
         % base per-turn length near inner radius
         Lbase_p(isEE|isU)  = 2.*(PriW(isEE|isU) + PriH(isEE|isU) + 4.*CoreInsulationThickness(isEE|isU));
         Lbase_p(isER|isUR) = 2.*pi.*(PriW(isER|isUR)./2 + CoreInsulationThickness(isER|isUR));
+        Lbase_p = Lbase_p';
 
         % average circumference of tape wraps
         Lavg_il_p = Lbase_p + pi.*(a1./2);
