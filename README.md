@@ -2,7 +2,7 @@
 *This repository includes code and Altium files created by Yiou He and Suzanne O'Meara as part of their respective theses at MIT under the supervision of Professor David Perrault. Their works' original files, architecture, procedures, and data are the foundation to the present implementation in "MatlabWorkingDirectory". The original Altium files & MCU code from Dr. He, and the MATLAB code transcribed to the best of my ability from the thesis PDF, are included in the OriginalWork directory.*
 
 Below is the content directly from the thesis work:
- - The MCU_and_Altium_files directory contains both the Altium files and MCU code for the 2017 1st generation HVDC power supply and the 3rd generation SCMLI HV AC power supply.
+ - The MCU_and_Altium_files directory contains both the Altium files and MCU code for the 2017 1st generation HVDC power supply and the 3rd generation SCMLI HV AC power supply. As of 10/22/25 it also contains schematic files for the RTC boost converter.
  - The MATLAB_code directory contains (currently) the LLC and RTC Boost driver and function scripts, as well as the SCMLI weight script and approximate full excel data files for CoreSizeData.xlsx, MOSFETs and Capacitor Masses.xlsx, and CoreLossData.xlsx. **The voltage multiplier weight scripts and data are not included.**
 
 ## Details on the specific procedures of each of the scripts is given in the theses available below:
@@ -21,7 +21,7 @@ This is a script modified from the 2020 thesis by Yiou He: "Towards High Voltage
 -  A big issue is that between results, I need to change ranges like the max layers, increment Q factor, etc. not because they are important parameters for me, but because I can't have them too high due to memory limitations and I can't have them too low to risk missing designs.
 
 ## Recent changes:
-- Added RTC boost original (as close as I can) PCB and schematic files.
+- Added RTC boost original (as close as I can) schematic files, manually copied in.
 - Allowed internal automatic computing for whether litz wire or solid magnet wire is better, and chooses corresponding results for the optimal choice
 - Both winding pattern options work now, center and double-leg, based on the thesis text.
 - U and UR core implementations for the winding pattern and insulation were included, since they weren't before.
@@ -38,8 +38,6 @@ This is a script modified from the 2020 thesis by Yiou He: "Towards High Voltage
 - Input core permeability data plots vs. frequency and temperature or through a plot digitizer instead of relying on the initial permeability. (Or use inductance factor of the core, or use complex permeability vs. frequency)
 - Input B-CL and B-H curve data at each frequency through plot digitization instead of interpolation with 2 points.
 - Compute inductor and transformer weights as a whole in the same script at once, and optimize for their coupled weight.
-- Add more core geometries and core materials.
-- Add U and UR cores geometries.
 - I want to add a plotting option for all of the candidate designs to a few graphs instead of a table, for visualization.
 - To stop the constant parameter adjustment, I should have another for-loop 
   that checks which parameter was the bottleneck, and expands it only then to
