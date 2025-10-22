@@ -21,6 +21,7 @@ This is a script modified from the 2020 thesis by Yiou He: "Towards High Voltage
 -  A big issue is that between results, I need to change ranges like the max layers, increment Q factor, etc. not because they are important parameters for me, but because I can't have them too high due to memory limitations and I can't have them too low to risk missing designs.
 
 ## Recent changes:
+- Added RTC boost original (as close as I can) PCB and schematic files.
 - Allowed internal automatic computing for whether litz wire or solid magnet wire is better, and chooses corresponding results for the optimal choice
 - Both winding pattern options work now, center and double-leg, based on the thesis text.
 - U and UR core implementations for the winding pattern and insulation were included, since they weren't before.
