@@ -1,40 +1,60 @@
 clc, clf, clear
 
-corelossfile = 'CoreLossData.xlsx';
-raw1 = readcell('CoreLossData.xlsx','Sheet','Freq');
-raw2 = readcell('CoreLossData.xlsx','Sheet','Bfield');
-raw3 = readcell('CoreLossData.xlsx','Sheet','Ploss');
-raw4 = readcell('CoreLossData.xlsx','Sheet','BSAT');
-raw5 = readcell('CoreLossData.xlsx','Sheet','MU');
-raw6 = readcell('CoreLossData.xlsx','Sheet','Density');
+corelossfile = 'CoreLossDataOLD.xlsx';
+raw1 = readcell('CoreLossDataOLD.xlsx','Sheet','Freq');
+raw2 = readcell('CoreLossDataOLD.xlsx','Sheet','Bfield');
+raw3 = readcell('CoreLossDataOLD.xlsx','Sheet','Ploss');
+raw4 = readcell('CoreLossDataOLD.xlsx','Sheet','BSAT');
+raw5 = readcell('CoreLossDataOLD.xlsx','Sheet','MU');
+raw6 = readcell('CoreLossDataOLD.xlsx','Sheet','Density');
 
 coresizefile = 'CoreSizeData.xlsx';
 % Ecore is the larger, perhaps inaccurate dataset, while ReviewedCores is a
 % manually vetted selection of cores
-raw = readcell('CoreSizeData.xlsx','Sheet','ReviewedCores');
+raw = readcell('CoreSizeData.xlsx','Sheet','OwnedCores');
 
 %% Parameters to Adjust
 %--------------------------------------------------------------------------
 
+
+% Something is wrong with double-leg window area calculation for the
+% transformer
+
+
+%{ 
+To stop the constant parameter adjustment, I should have another for-loop 
+that checks which parameter was the bottleneck, and expands it only then to
+iterate until REAL hard bounds that cannot be surpassed. I'm thinking
+things like winding number, incremental winding, Q, A, K, input voltage, etc.
+should be SOFT requirements that can be expanded, and then things like
+weight and temperature and freq and output voltage could be HARD
+requirements that cannot be surpassed. Currently there are too many things
+to change.
+
+I also think the script should iterate once for each winding pattern, and
+using interlayer tape or not, and possibly some other ranges. This would
+extend runtime, but would make user interfacing a lot easier.
+%}
+
 Date = '10-14-25';
 % Quality factor
-Q_range = 0.5:0.1:2;
+Q_range = 0.5:0.1:1;
 % Resonant frequency
-f0_range = 200000;
+f0_range = 25000;
 % Capacitance ratio
-A_range = 0.1;
-% Turns ratio secondary/primary
-K_range = 50;
+A_range = 0.01:0.01:0.1;
 % DC input voltage range (unipolar peak) (if Vppeak is the param. to select around,
 % keep GT ~1, but optimal weight is usually achieved with tank gain of ~2)
-Vin_range = 200;
+Vin_range = 95;
 % Peak of the output voltage that one hope to achieve (V)
 % peak to peak is 2x this value
-Vo_range = 10000;
+Vo_range = 3500;
 % Output power desired (W)
-Po_range = 700;
+Po_range = 50;
 % frequency of the transformer
-fs_range = 200000;
+fs_range = 25000;
+% Turns ratio secondary/primary
+K_range = 30:1:35;
 
 
 % Winding Pattern index: 1 indicates center leg winding, 2 indicates double
