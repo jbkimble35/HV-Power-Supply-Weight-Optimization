@@ -21,6 +21,12 @@ raw = readcell('CoreSizeData.xlsx','Sheet','OwnedCores');
 % transformer
 
 
+% Magnetizing inductance is assumed "large enough" as explained in the
+% thesis, with A being the capacitance parallel vs. series ratio i.e.
+% the inductance leakage vs. magnetizing ratio.
+
+
+
 %{ 
 To stop the constant parameter adjustment, I should have another for-loop 
 that checks which parameter was the bottleneck, and expands it only then to
@@ -41,8 +47,9 @@ Date = '10-14-25';
 Q_range = 0.5:0.1:1;
 % Resonant frequency
 f0_range = 25000;
-% Capacitance ratio
-A_range = 0.01:0.01:0.1;
+% Capacitance ratio (inverse of inductance ratio) (shouldn't exceed 10,
+% since ZVS bandwidth becomes too small)
+A_range = linspace(0.16,1,10);
 % DC input voltage range (unipolar peak) (if Vppeak is the param. to select around,
 % keep GT ~1, but optimal weight is usually achieved with tank gain of ~2)
 Vin_range = 95;
@@ -50,7 +57,7 @@ Vin_range = 95;
 % peak to peak is 2x this value
 Vo_range = 3500;
 % Output power desired (W)
-Po_range = 50;
+Po_range = 40;
 % frequency of the transformer
 fs_range = 25000;
 % Turns ratio secondary/primary
