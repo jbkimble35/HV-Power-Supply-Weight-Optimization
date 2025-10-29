@@ -30,7 +30,7 @@ dielectricstrength_insulation = 0.5 * 200e5;
 %-------------------------------------------
 
 % Minimum transformer efficiency
-etaXfmer = 0.90;
+etaXfmer = 0.95;
 % Max operating temp in Celsius
 Tmax = 100;
 % Min operating temp in Celsius
@@ -571,17 +571,6 @@ else
             warning('Wrong winding pattern');
     end
 
-    % Calculate leakage inductance (not verified or used in this code)
-    %--------------------------------------------------------------------
-
-    Lg = u0.*(W - Mls.*Sec_FullWireDia - Mlp.*Pri_FullWireDia-tTapePri-tTapeSec).*SecH./H;
-        %in Henry
-    Xg = 2.*pi.*fs.*Lg;
-    R_pri = (Vspeak.*Vspeak./2./Po)./Ns.^2;
-    Lg_Lc_ratio = (W - 2.*CoreInsulationThickness - Mls.*Sec_FullWireDia - Mlp.* ...
-        Pri_FullWireDia).*Le./ui./SecH./H;
-    real_ratio = 1./(1 + Lg_Lc_ratio + Xg./R_pri);
-    
     % Calculate Copper Loss
     %--------------------------------------------------------
 
@@ -708,6 +697,30 @@ else
     %---------------------------------------------
     TotalWeight = Wcore + WeightPri_copper + WeightSec_copper + WeightPri_Insu + ...
         WeightSec_Insu + WeightCore_Insu+Weight_InterlayerTape;
+
+    % Calculate leakage inductance (not verified or used in this code)
+    %--------------------------------------------------------------------
+    
+    % Leakage inductance per turn
+    Lg = u0.*(W - Mls.*Sec_FullWireDia - Mlp.*Pri_FullWireDia-tTapePri-tTapeSec).*SecH./H;
+        %in Henry
+
+    % Fortescue Equation as presented by Ruben Lee, ELECTRONIC TRANSFORMERS AND CIRCUITS 2nd ed 1947
+    % Leakage inductance total
+    %LgT = 10.6.*Np.^2.*(TLp+TLs)./2.*(2*CoreInsulationThickness.*39.37+H)./(10^9.*Lavg_il_s);
+
+    % Reactance of leakage per turn
+    Xg = 2.*pi.*fs.*Lg;
+
+    % Primary reflected load resistance
+    R_pri = (Vspeak.*Vspeak./2./Po)./Ns.^2;
+
+    % Leakage to core inductance ratio
+    Lg_Lc_ratio = (W - 2.*CoreInsulationThickness - Mls.*Sec_FullWireDia - Mlp.* ...
+        Pri_FullWireDia).*Le./ui./SecH./H;
+    % Coupling ratio
+    real_ratio = 1./(1 + Lg_Lc_ratio + Xg./R_pri);
+    
 
     % Filter good designs
     %---------------------------------------------
