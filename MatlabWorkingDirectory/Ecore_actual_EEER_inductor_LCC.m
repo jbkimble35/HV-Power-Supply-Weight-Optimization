@@ -28,13 +28,13 @@ WireInsulationDensity = 2.2e6; % TEFLON
 %-------------------------------------------
 
 % Lowest allowed inductor efficiency
-etaInductor = 0.9;
+etaInductor = 0.90;
 % Max allowable temperature (C)
 Tmax = 100;
 % Min allowable temperature (C)
 Tmin = 25;
 % Maximum allowable weight (g)
-MaxWeight = 5000;
+MaxWeight = 10000;
 % Air gap (m)
 mingap = 0;
 
@@ -48,7 +48,7 @@ MaxWinding = 200;
 % Incremental winding
 IncreN = 1;
 % Maximum layer of winding
-MaxMl = 5;
+MaxMl = 10;
 % Incremental layers. The layers of a transformer reference each wrap of
 % turns that fills the window height before moving on to the next level.
 % Once one layer fills, the next layer is wound on top, seperated by an
@@ -73,7 +73,7 @@ CuMult = 1;
 % Bmax discount factor
 BSAT_discount = 0.75;
 % Actual core loss is always higher than the calculated
-CoreLossMultiple = 1.0;
+CoreLossMultiple = 1;
 % Maximum packing factor (copper area compared with total window area)
 maxpackingfactor = 0.7;
 % Minimum packing factor
@@ -390,9 +390,6 @@ else
     ue = ui./(1+ui.*airgap./Le);
     Bm = u0.*Np.*Imax./Le.*ue;
 
-    % Window area
-    Wa = H.*W;
-
     % Core weight (g)
     Wcore = Ve.*CoreDensity(matno_record);
 
@@ -501,6 +498,7 @@ else
     Pri_Rac=Pri_Rdc.*Pri_Fr;
     Pcopper=Iprms.^2.*Pri_Rac;
 
+    Wa=2.*H.*W.*(isEE|isER)+H.*W.*(isU|isUR);
     Rth=16.31e-3.*(Ac.*Wa).^(-0.405);
     Tafterloss=Rth.*(Pcopper+Pcore)+25;
 
