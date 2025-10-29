@@ -46,7 +46,7 @@ MaxMlp = 5;
 % Incremental layer of primary winding
 IncreMlp = 1;
 % Maximum layer of secondary winding
-MaxMls = 20;
+MaxMls = 25;
 % Incremental layer of secondary winding
 IncreMls = 1;
 % Max allowable transformer weight (g)
@@ -58,7 +58,7 @@ MaxWeight = 10000;
 % Saturation flux density derating
 BSAT_discount = 0.75;
 % Core loss multiplier
-CoreLossMultiple = 1.0;
+CoreLossMultiple = 1;
 maxpackingfactor = 0.7;
 minpackingfactor = 0.01;
 % Litz copper fill
@@ -608,9 +608,9 @@ else
 
     % Calculate temperature rise
     %----------------------------------------------------------------
-
-    Rth    = 16.31e-3 .* (Ac .* H.*W) .^ (-0.405);   % K/W
-    Tafterloss = Rth .* (Pcopper + Pcore) + 25;          % °C
+    Wa=2.*H.*W.*(isEE|isER)+H.*W.*(isU|isUR);
+    Rth    = 16.31e-3.*(Ac.*Wa).^(-0.405);   % K/W
+    Tafterloss = Rth.*(Pcopper+Pcore)+25;          % °C
 
     % Weight of core insulation
     %----------------------------------------------------------------
