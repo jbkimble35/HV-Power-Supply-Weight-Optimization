@@ -1,87 +1,10 @@
 function y = Ecore_actual_EEER_xfmer_LCC(raw,raw1,raw2,raw3,raw4,raw5,raw6, ...
-    Vppeak_range, Vspeak_range, Po_range, fs_range, Vinsulation_max_range, Winding_Pattern)
-
-% Tunable Parameters
-%% -------------------------------------------------------------------------------------
-
-% The inductor is much lower voltage since it's on the primary side, so it
-% doesn't need some of these insulation parameters.
-
-% Insulation
-%-------------------------------------------
-
-% Use interlayer tape instead of full wire jacket ratings?
-layerTapeUse = true;
-kaptonDielStrength = 0.5*200e5; % V/m derated 50%
-kaptonThickness = 60e-6; % m
-kaptonDensity = 1.42e6; % g/m^3
-enamelThickness = 60e-6;
-MinTapeMargin = 5e-4;
-cover_fac  = 1.05; % overlap of tape on other areas
-
-% Core sheath insulation
-CoreInsulationDensity = 2.2e6;       % g/m^3 (Teflon)
-WireInsulationDensity = 2.2e6;       % g/m^3 (Teflon)
-% Dielectric strength of core insulation material (V/m) 50% derated
-dielectricstrength_insulation = 0.5 * 200e5;
-
-
-% Transformer parameters
-%-------------------------------------------
-
-% Minimum transformer efficiency
-etaXfmer = 0.95;
-% Max operating temp in Celsius
-Tmax = 100;
-% Min operating temp in Celsius
-Tmin = 25;
-% Minimum primary windings
-MinPriWinding = 1;
-% Maximum primary windings
-MaxPriWinding = 200;
-% Incremental primary winding
-IncreNp = 1;
-% Maximum layer of primary winding
-MaxMlp = 5;
-% Incremental layer of primary winding
-IncreMlp = 1;
-% Maximum layer of secondary winding
-MaxMls = 25;
-% Incremental layer of secondary winding
-IncreMls = 1;
-% Max allowable transformer weight (g)
-MaxWeight = 10000;
-
-% Deratings
-%------------------------------------------
-
-% Saturation flux density derating
-BSAT_discount = 0.75;
-% Core loss multiplier
-CoreLossMultiple = 1;
-maxpackingfactor = 0.7;
-minpackingfactor = 0.01;
-% Litz copper fill
-LitzFactor = 0.8;
-
-% Electrical constants
-%-------------------------------------------
-
-% density of copper (g/m^3)
-CopperDensity = 8.96e6;
-% ohm*m, resistivity of copper at 100C
-rou = 2.3e-8;
-% permittivity of free space HA/m^2
-u0 = 4*pi*1e-7;
-% Minimum secondary wire diameter (m)
-MinWireSize = 0.07874e-3;
-% Max allowable current density in wire, (A/m^2)
-% 500A/cm^2 is the upper bound recommended, but without active cooling, and
-% since the magnetics are thermally insulated, less is assumed
-Jwmax = 3e6;
-% Minimal litz diameter (m)
-MinLitzDia = 0.07874e-3; % AWG40
-
+    Vppeak_range, Vspeak_range, Po_range, fs_range, Vinsulation_max_range,...
+    Winding_Pattern,layerTapeUse,enamelThickness,kaptonDielStrength,kaptonThickness,...
+    MinTapeMargin,kaptonDensity,CoreInsulationDensity,WireInsulationDensity,dielectricstrength_insulation, ...
+    etaXfmer,TmaxX,TminX,MinPriWindingX,MaxPriWindingX,IncreNpX,MaxMlpX,IncreMlpX,MaxMlsX,IncreMlsX,MaxWeightX, ...
+    BSAT_discountX,CoreLossMultipleX,maxpackingfactorX,minpackingfactorX,LitzFactor,MinWireDia,...
+    Jwmax,MinLitzDia,CopperDensity,rou,u0)
 
 % Body of function
 %% --------------------------------------------------------------------------------------
@@ -212,8 +135,8 @@ CoreMatIndexSweep = find(FreqFlag);
 
 [Po, fs, Vppeak, Vspeak, Vinsulation_max, matno_record, ShuffleXcoreIndex, Np, Mlp, Mls] = ndgrid( ...
     Po_range, fs_range, Vppeak_range, Vspeak_range, Vinsulation_max_range, ...
-    CoreMatIndexSweep, ShuffleIndex, MinPriWinding:IncreNp:MaxPriWinding, ...
-    1:IncreMlp:MaxMlp, 1:IncreMls:MaxMls);
+    CoreMatIndexSweep, ShuffleIndex, MinPriWindingX:IncreNpX:MaxPriWindingX, ...
+    1:IncreMlpX:MaxMlpX, 1:IncreMlsX:MaxMlsX);
 
 % Flatten
 Po = reshape(Po,[],1);
@@ -243,8 +166,8 @@ XcoreIndex = TransformerCoreIndex(ShuffleXcoreIndex);
 XcoreCoreShapeIndex = XcoreCoreShapeIndex(ShuffleXcoreIndex);
 
 % Quick BSAT feasibility using datasheet formula
-Bm_dummy = (Vppeak/pi./fs)./(2*Np.*Ac);
-Keep_Bmindex = find(Bm_dummy < BSAT*BSAT_discount);
+Bm_dummy = Vppeak./(pi.*fs.*2.*Np.*Ac);
+Keep_Bmindex = find(Bm_dummy < BSAT*BSAT_discountX);
 KeepIndex = Keep_Bmindex;
 
 % 1st Filter
@@ -275,7 +198,7 @@ Mls                  = Mls(KeepIndex);
 
 if isempty(Po)
     fprintf('Bm_dummy range: %.3f .. %.3f T\n', min(Bm_dummy), max(Bm_dummy));
-    fprintf('BSAT*0.75 range: %.3f .. %.3f T\n', min(BSAT*BSAT_discount), max(BSAT*BSAT_discount));
+    fprintf('BSAT*0.75 range: %.3f .. %.3f T\n', min(BSAT*BSAT_discountX), max(BSAT*BSAT_discountX));
     error(['Empty. Every candidate design violates the B-SAT screening.' ...
         'Increase transformer geometry size (likely), or Increase Np range, ' ...
         'or loosen other ranges, or ensure units match. Try again']);
@@ -388,7 +311,7 @@ else
     % Calculate core loss (W)
     % -------------------------------------
 
-    Pcore = CoreLossMultiple.*Ve.*K1.*fs.^alpha.*Bm.^beta;
+    Pcore = CoreLossMultipleX.*Ve.*K1.*fs.^alpha.*Bm.^beta;
 
     % Determine wire type, and num of strands if Litz
     % -----------------------------------------------
@@ -397,7 +320,7 @@ else
     Areq_s=Isrms./Jwmax;                                % [m^2]
     
     dsolid_p=2.*sqrt(Areq_p./pi);                       % [m]
-    dsolid_s=max(MinWireSize,2.*sqrt(Areq_s./pi));                       % [m]
+    dsolid_s=max(MinWireDia,2.*sqrt(Areq_s./pi));                       % [m]
     
     useSolid_p=(dsolid_p<=2.*skindepth);
     useSolid_s=(dsolid_s<=2.*skindepth);
@@ -413,13 +336,13 @@ else
     Pri_Nstrands=ones(size(Iprms));
     Pri_Nstrands(~useSolid_p)=ceil(Areq_p(~useSolid_p)./AstrandMin(~useSolid_p));
 
-    Pri_WireDia=max(MinWireSize,dsolid_p);
+    Pri_WireDia=max(MinWireDia,dsolid_p);
     idx=~useSolid_p;
     if any(idx)
         Pri_WireDia(idx)=2.*sqrt(Pri_Nstrands(idx).*AstrandMin(idx).*LitzFactor./pi);
     end
     % Strand diameter
-    Pri_ds=max(MinWireSize,dsolid_p);
+    Pri_ds=max(MinWireDia,dsolid_p);
     Pri_ds(idx)=dstrandMinlitz(idx);
 
     Pri_FullWireDia = Pri_WireDia + 2.*Vppeak./dielectricstrength_insulation;
@@ -432,17 +355,17 @@ else
 
     Sec_Nstrands=ones(size(Isrms));
     Sec_Nstrands(~useSolid_s)=ceil(Areq_s(~useSolid_s)./AstrandMin(~useSolid_s));
-    Sec_WireDia=max(MinWireSize,dsolid_s);
+    Sec_WireDia=max(MinWireDia,dsolid_s);
     idx=~useSolid_s;
     if any(idx)
         Sec_WireDia(idx)=2.*sqrt(Sec_Nstrands(idx).*AstrandMin(idx).*LitzFactor./pi);
     end
     % Strand diameter
-    Sec_ds=max(MinWireSize,dsolid_s);
+    Sec_ds=max(MinWireDia,dsolid_s);
     Sec_ds(idx)=dstrandMinlitz(idx);
 
-    % Changed vsp/die to have 2* factor like pri.
-    Sec_FullWireDia = Sec_WireDia + 2.*Vspeak./dielectricstrength_insulation;
+    % Changed vsp/die to have 2* factor like pri, then reverted.
+    Sec_FullWireDia = Sec_WireDia + Vspeak./dielectricstrength_insulation;
     if layerTapeUse
         Sec_FullWireDia = Sec_WireDia + enamelThickness.*2;
     end
@@ -451,6 +374,7 @@ else
     % --------------------
     
     CoreInsulationThickness = Vinsulation_max./dielectricstrength_insulation;
+    % Why is this calculated here and in the winding pattern part?
     Pri_PerLayer=floor(Np./Mlp);
     Sec_PerLayer=floor(Ns./Mls);
 
@@ -582,6 +506,7 @@ else
 
     TLp = TLp';
     TLs = TLs';
+
     % Fixed overestimation by litzfactor
     Pri_Rdc = rou .* TLp ./ (pi.*dsolid_p.^2./4);
     Sec_Rdc = rou .* TLs ./ (pi.*dsolid_s.^2./4);
@@ -682,8 +607,8 @@ else
         nBndPri = max(Mlp-1,0);
         nBndSec = max(Mls-1,0);
     
-        % total tape length (all boundaries × plies × overlap factor)
-        L_tape_total = cover_fac .* ( nBndPri.*numTapePerLayerPri.*Lavg_il_p + nBndSec.*numTapePerLayerSec.*Lavg_il_s ); % m
+        % total tape length (all boundaries × plies × overlap factor) (1.05 is 5% extra tape)
+        L_tape_total = 1.05.*( nBndPri.*numTapePerLayerPri.*Lavg_il_p + nBndSec.*numTapePerLayerSec.*Lavg_il_s ); % m
     
         % tape width and volume
         w_tape = H + 2*tapeMargin;                 % m
@@ -701,43 +626,44 @@ else
     % Calculate leakage inductance (not verified or used in this code)
     %--------------------------------------------------------------------
     
-    % Leakage inductance per turn
-    Lg = u0.*(W - Mls.*Sec_FullWireDia - Mlp.*Pri_FullWireDia-tTapePri-tTapeSec).*SecH./H;
-        %in Henry
+    % In this section, I need to include 187-190 calculations
 
-    % Fortescue Equation as presented by Ruben Lee, ELECTRONIC TRANSFORMERS AND CIRCUITS 2nd ed 1947
-    % Leakage inductance total
-    %LgT = 10.6.*Np.^2.*(TLp+TLs)./2.*(2*CoreInsulationThickness.*39.37+H)./(10^9.*Lavg_il_s);
+    %XCp = 1/(2.*pi.*fs.*Cp)
 
-    % Reactance of leakage per turn
-    Xg = 2.*pi.*fs.*Lg;
+    % Magnetizing inductance
+    % Lm = ui.*u0.*Ac.*Np.^2./Le;
+    % XLm = 2.*pi.*fs.*Lm;
+    % 
+    % WireInsulThickness = (Pri_FullWireDia-Pri_WireDia)./2;
 
-    % Primary reflected load resistance
-    R_pri = (Vspeak.*Vspeak./2./Po)./Ns.^2;
+    % Lleak = (u0.*Np.^2.*Tls)./(H-2.*WireInsulThickness).*...
+    %     (WireInsulThickness+(Pri_PerLayer.*Pri_FullWireDia+ ...
+    %     Sec_PerLayer.*Sec_FullWireDia)./3);
 
-    % Leakage to core inductance ratio
-    Lg_Lc_ratio = (W - 2.*CoreInsulationThickness - Mls.*Sec_FullWireDia - Mlp.* ...
-        Pri_FullWireDia).*Le./ui./SecH./H;
-    % Coupling ratio
-    real_ratio = 1./(1 + Lg_Lc_ratio + Xg./R_pri);
-    
+    % Unit length turn-to-tun capacitance following equation 8
+    % Ctt = 0; % look at source
+
+    % Secondary winding self capacitance
+    % CparaSelf = ((Ns./Np).^2).*(Sec_PerLayer.*(Sec_PerLayer+1) ...
+    %   .*(2.*Sec_PerLayer+1))./(6.*Sec_PerLayer.^2).*(4.*...
+    %   (Mls-1))./(Mls.^2).*Tls.*Ctt;
 
     % Filter good designs
     %---------------------------------------------
 
     % Filter by B
-    B_index = find(Bm < BSAT*BSAT_discount);
+    B_index = find(Bm < BSAT*BSAT_discountX);
     [Bmin,BminIndex] = min(Bm);
         
     % Filter by Temperature and Power Loss
     P_loss_index = find(Pcopper + Pcore <= Po./etaXfmer - Po);
-    Tafterloss_index = find(Tafterloss <= Tmax);
-    Tmin_index = find(Tafterloss >= Tmin);
+    Tafterloss_index = find(Tafterloss <= TmaxX);
+    Tmin_index = find(Tafterloss >= TminX);
     [Tminimum,TminValIndex] = min(Tafterloss);
     [Pmin,PminValIndex] = min(Pcopper+Pcore);
 
     % Filter by weight
-    TotalWeight_index = find(TotalWeight < MaxWeight);
+    TotalWeight_index = find(TotalWeight < MaxWeightX);
     [WMin,WminValIndex] = min(TotalWeight);
 
     % Filter by packing factor min and max
@@ -762,8 +688,8 @@ else
                 + max(Mls-1,0).*numTapePerLayerSec.*kaptonThickness))) ./ ((H-2.*tapeMargin).*W);
         end
     end
-    OverallPackingmin_index = find(OverallPacking >= minpackingfactor);
-    OverallPackingmax_index = find(OverallPacking <= maxpackingfactor);
+    OverallPackingmin_index = find(OverallPacking >= minpackingfactorX);
+    OverallPackingmax_index = find(OverallPacking <= maxpackingfactorX);
     [PackingMin,PackingMinValIndex] = max(OverallPacking);
     [PackingMax,PackingMaxValIndex] = min(OverallPacking);
 
@@ -897,6 +823,11 @@ else
         V_insu   = ((WeightCore_Insu+WeightPri_Insu+WeightSec_Insu))/CoreInsulationDensity;
         Volume_m3 = Ve + V_cu + V_insu+V_tape;
 
+        Sec_WireDiaMM = Sec_WireDia.*1000;
+        Sec_WireAWG = -39*log(Sec_WireDiaMM./0.127)./log(92)+36;
+        Pri_WireDiaMM = Pri_WireDia.*1000;
+        Pri_WireAWG = -39*log(Pri_WireDiaMM./0.127)./log(92)+36;
+
         Design(:, 1)  = Po(TotalWeightSortIndex);
         Design(:, 2)  = Vppeak(TotalWeightSortIndex);
         Design(:, 3)  = Vspeak(TotalWeightSortIndex);
@@ -906,9 +837,9 @@ else
         Design(:, 7)  = Np(TotalWeightSortIndex);
         Design(:, 8)  = Ns(TotalWeightSortIndex);
         Design(:, 9)  = Bm(TotalWeightSortIndex);
-        Design(:,10)  = Pri_WireDia(TotalWeightSortIndex);
+        Design(:,10)  = Pri_WireAWG(TotalWeightSortIndex);
         Design(:,11)  = Pri_FullWireDia(TotalWeightSortIndex);
-        Design(:,12)  = Sec_WireDia(TotalWeightSortIndex);
+        Design(:,12)  = Sec_WireAWG(TotalWeightSortIndex);
         Design(:,13)  = Sec_FullWireDia(TotalWeightSortIndex);
         Design(:,14)  = Ippeak(TotalWeightSortIndex) ./ ...
                         (pi * Pri_Nstrands(TotalWeightSortIndex) .* Pri_ds(TotalWeightSortIndex).^2 / 4);
