@@ -1,94 +1,11 @@
 function y = Ecore_actual_EEER_inductor_LCC(raw,raw1,raw2,raw3,raw4,raw5,raw6, ...
     Vin_range, G_range, Po_range, fs_range, Ls_range, Imax_range, Winding_Pattern, ...
-    LCC_Q, LCC_f0, LCC_A, LCC_K, LCC_RT, LCC_Ls, LCC_Cs, LCC_Cp, LCC_GT)
-
-% Tunable Parameters
-%% -------------------------------------------------------------------------------------
-
-% Insulation
-%-------------------------------------------
-
-% Need to add interlayer tape
-layerTapeUse = true;
-enamelThickness = 60e-6;
-kaptonDielStrength = 0.5*200e5;
-kaptonThickness = 60e-6;
-MinTapeMargin = 5e-4;
-kaptonDensity = 1.42e6; % g/m^3
-cover_fac  = 1.05; % overlap of tape on other areas
-
-% Dielectric strength of the insulation material (V/m), discount 50%
-dielectricstrength_insulation = 0.5 * 200e5; % TEFLON
-% g/m^3, density of core insulation materials
-CoreInsulationDensity = 2.2e6; % TEFLON
-% g/m^3, density of wire insulation materials
-WireInsulationDensity = 2.2e6; % TEFLON
-
-% Inductor parameters
-%-------------------------------------------
-
-% Lowest allowed inductor efficiency
-etaInductor = 0.90;
-% Max allowable temperature (C)
-Tmax = 100;
-% Min allowable temperature (C)
-Tmin = 25;
-% Maximum allowable weight (g)
-MaxWeight = 10000;
-% Air gap (m)
-mingap = 0;
-
-% Winding and Wire Parameters
-%------------------------------------------
-
-% Minimum turns
-MinWinding = 1;
-% Maximum turns
-MaxWinding = 200;
-% Incremental winding
-IncreN = 1;
-% Maximum layer of winding
-MaxMl = 10;
-% Incremental layers. The layers of a transformer reference each wrap of
-% turns that fills the window height before moving on to the next level.
-% Once one layer fills, the next layer is wound on top, seperated by an
-% insulation layer.
-IncreMl = 1;
-% Minimal wire diameter (m)
-MinWireDia = 0.079/1000; % AWG28, 0.35 mm is AWG29, 0.079 is AWG40
-% Max allowable current density in the wire (A/m^2)
-% 500A/cm^2 is the upper bound recommended, but without active cooling, and
-% since the magnetics are thermally insulated, less is assumed
-Jwmax = 3e6;
-% Minimal litz diameter one can get (m)
-MinLitzDia = 0.05024 / 1000; % AWG44 % 0.0316 is AWG48, 0.03983 is AWG46
-% g/m^3, density of copper
-CopperDensity = 8.96*1000*1000;
-% Copper wire multiple to reduce resistive losses
-CuMult = 1;
-
-% Discount factors
-%----------------------------------------
-
-% Bmax discount factor
-BSAT_discount = 0.75;
-% Actual core loss is always higher than the calculated
-CoreLossMultiple = 1;
-% Maximum packing factor (copper area compared with total window area)
-maxpackingfactor = 0.7;
-% Minimum packing factor
-minpackingfactor = 0.01;
-% Winding factor of litz wire, assuming only 80% of wire size is copper
-LitzFactor = 0.8;
-
-% Electrical Parameters
-%----------------------------------------
-
-% Electrical constants. Normally there is no need to change
-% ohm*m, resistivity of copper at 100C
-rou = 2.3*1e-8;
-% H/A·m^2, permeability of free space
-u0 = 4*pi*10^(-7);
+    LCC_Q, LCC_f0, LCC_A, LCC_K, LCC_RT, LCC_Ls, LCC_Cs, LCC_Cp, LCC_GT,layerTapeUse,...
+    enamelThickness,kaptonDielStrength,kaptonThickness,MinTapeMargin,kaptonDensity, ...
+    CoreInsulationDensity,WireInsulationDensity,dielectricstrength_insulation,...
+    etaInductor,TmaxL,TminL,MaxWeightL,mingap,MinWindingL,MaxWindingL,IncreNL, ...
+    MaxMlL,IncreMlL,BSAT_discountL,CoreLossMultipleL,maxpackingfactorL,minpackingfactorL,CuMultL, ...
+    LitzFactor,MinWireDia,Jwmax,MinLitzDia,CopperDensity,rou,u0)
 
 
 % Function Body
@@ -221,7 +138,7 @@ CoreMatIndexSweep = find(FreqFlag);
 
 [Po, fs, Vin, G, Ls, Imax, matno_record, ShuffleLcoreIndex, Np, Mlp] = ndgrid( ...
     Po_range, fs_range, Vin_range, G_range, Ls_range, Imax_range, ...
-    CoreMatIndexSweep, ShuffleIndex, MinWinding:IncreN:MaxWinding, 1:IncreMl:MaxMl);
+    CoreMatIndexSweep, ShuffleIndex, MinWindingL:IncreNL:MaxWindingL, 1:IncreMlL:MaxMlL);
 
 % Flattens the 10-D array into a very long column vector
 Po = reshape(Po,[],1);
@@ -281,7 +198,7 @@ ue = ui./(1+ui.*airgap./Le);
 % Estimates peak flux density
 Bm_dummy = u0.*Np.*Imax./Le.*ue;
 % Keeps designs where saturation > estimate with safety margin
-Keep_Bmindex = find(Bm_dummy < BSAT*BSAT_discount);
+Keep_Bmindex = find(Bm_dummy < BSAT*BSAT_discountL);
 % Keeps designs that pass both airgap and flux density
 KeepIndex = intersect(KeepAirGap, Keep_Bmindex);
 
@@ -394,7 +311,7 @@ else
     Wcore = Ve.*CoreDensity(matno_record);
 
     % Check core loss
-    Pcore = CoreLossMultiple.*Ve.*K1.*fs.^alpha.*Bm.^beta;
+    Pcore = CoreLossMultipleL.*Ve.*K1.*fs.^alpha.*Bm.^beta;
 
     % Preallocate
     TLp = zeros(size(Np));
@@ -407,7 +324,7 @@ else
     % AC skin depth
     skindepth=1./sqrt(pi.*fs.*u0./rou);
     % Area required of wire m^2
-    Areq_p=CuMult.*Iprms./Jwmax;
+    Areq_p=CuMultL.*Iprms./Jwmax;
     % solid equivalent diameter
     dsolid=2.*sqrt(Areq_p./pi);
     % Solid vs. litz
@@ -567,8 +484,8 @@ else
         % number of inter-layer boundaries
         nBndPri = max(Mlp-1,0);
     
-        % total tape length (all boundaries × plies × overlap factor)
-        L_tape_total = cover_fac.*(nBndPri.*numTapePerLayerPri.*Lavg_il_p); % m
+        % total tape length (all boundaries × plies × overlap factor) (1.05 is 5% extra tape)
+        L_tape_total = 1.05.*(nBndPri.*numTapePerLayerPri.*Lavg_il_p); % m
     
         % tape width and volume
         w_tape = H+2.*tapeMargin;                 % m
@@ -587,18 +504,18 @@ else
     %---------------------------------------------
 
     % Filter by B
-    B_index = find(Bm < BSAT*BSAT_discount);
+    B_index = find(Bm < BSAT*BSAT_discountL);
     [Bmin,BminIndex] = min(Bm);
         
     % Filter by Temperature and Power Loss
     P_loss_index = find(Pcopper + Pcore <= Po./etaInductor - Po);
-    Tafterloss_index = find(Tafterloss <= Tmax);
-    Tmin_index = find(Tafterloss >= Tmin);
+    Tafterloss_index = find(Tafterloss <= TmaxL);
+    Tmin_index = find(Tafterloss >= TminL);
     [Tminimum,TminValIndex] = min(Tafterloss);
     [Pmin,PminValIndex] = min(Pcopper+Pcore);
 
     % Filter by weight
-    TotalWeight_index = find(TotalWeight <= MaxWeight);
+    TotalWeight_index = find(TotalWeight <= MaxWeightL);
     [WMin,WminValIndex] = min(TotalWeight);
 
     % Filter by packing factor min and max
@@ -614,8 +531,8 @@ else
             OverallPacking = ((pi.*(Pri_FullWireDia.^2)./4).*Np) ./ ((H-2.*tapeMargin).*W);
         end
     end
-    OverallPackingmin_index = find(OverallPacking >= minpackingfactor);
-    OverallPackingmax_index = find(OverallPacking <= maxpackingfactor);
+    OverallPackingmin_index = find(OverallPacking >= minpackingfactorL);
+    OverallPackingmax_index = find(OverallPacking <= maxpackingfactorL);
     [PackingMin,PackingMinValIndex] = max(OverallPacking);
     [PackingMax,PackingMaxValIndex] = min(OverallPacking);
 
@@ -687,6 +604,9 @@ else
            + WeightPri_Insu(TotalWeightSortIndex)./WireInsulationDensity ...
            + WeightCore_Insu(TotalWeightSortIndex)./CoreInsulationDensity;
 
+        Pri_WireDiaMM = Pri_WireDia.*1000;
+        Pri_WireAWG = -39*log(Pri_WireDiaMM./0.127)./log(92)+36;
+
         % Preallocate Design_inductor
         Design_inductor = zeros(numel(TotalWeightSortIndex), 37);
 
@@ -698,7 +618,7 @@ else
         Design_inductor(:, 6)  = matfs(TotalWeightSortIndex);
         Design_inductor(:, 7)  = Np(TotalWeightSortIndex);
         Design_inductor(:, 8)  = Bm(TotalWeightSortIndex);
-        Design_inductor(:, 9)  = Pri_WireDia(TotalWeightSortIndex);
+        Design_inductor(:, 9)  = Pri_WireAWG(TotalWeightSortIndex);
         Design_inductor(:,10)  = Pri_FullWireDia(TotalWeightSortIndex);
         Design_inductor(:,11)  = Imax(TotalWeightSortIndex) ./ ...
             (pi * Pri_Nstrands(TotalWeightSortIndex) .* Pri_ds(TotalWeightSortIndex).^2 / 4);
