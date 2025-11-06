@@ -1,17 +1,19 @@
 clc, clf, clear
 
 corelossfile = 'CoreLossDataOLD.xlsx';
-raw1 = readcell('CoreLossDataOLD.xlsx','Sheet','Freq');
-raw2 = readcell('CoreLossDataOLD.xlsx','Sheet','Bfield');
-raw3 = readcell('CoreLossDataOLD.xlsx','Sheet','Ploss');
-raw4 = readcell('CoreLossDataOLD.xlsx','Sheet','BSAT');
-raw5 = readcell('CoreLossDataOLD.xlsx','Sheet','MU');
-raw6 = readcell('CoreLossDataOLD.xlsx','Sheet','Density');
-
 coresizefile = 'CoreSizeData.xlsx';
+coresizeSheetname = 'OwnedCores';
+
+raw1 = readcell(corelossfile,'Sheet','Freq');
+raw2 = readcell(corelossfile,'Sheet','Bfield');
+raw3 = readcell(corelossfile,'Sheet','Ploss');
+raw4 = readcell(corelossfile,'Sheet','BSAT');
+raw5 = readcell(corelossfile,'Sheet','MU');
+raw6 = readcell(corelossfile,'Sheet','Density');
+
 % Ecore is the larger, perhaps inaccurate dataset, while ReviewedCores is a
 % manually vetted selection of cores. OwnedCores is the 3 cores we own.
-raw = readcell('CoreSizeData.xlsx','Sheet','OwnedCores');
+raw = readcell(coresizefile,'Sheet',coresizeSheetname);
 
 %% Parameters to Adjust
 %--------------------------------------------------------------------------
@@ -73,7 +75,7 @@ Vin_range = 5;
 % peak to peak is 2x this value
 Vo_range = 20;
 % Output power desired (W)
-Po_range = 1;
+Po_range = 10;
 % frequency of the transformer
 fs_range = 12000;
 % Turns ratio secondary/primary
@@ -107,7 +109,7 @@ dielectricstrength_insulation = 0.5 * 200e5;
     % Min allowable temperature (C)
     TminL = 25;
     % Maximum allowable weight (g)
-    MaxWeightL = 10000;
+    MaxWeightL = 1000;
     % Air gap (m)
     mingap = 0;
     
@@ -148,7 +150,7 @@ dielectricstrength_insulation = 0.5 * 200e5;
 %-------------------------------------------
     
     % Minimum transformer efficiency
-    etaXfmer = 0.90;
+    etaXfmer = 0.95;
     % Max operating temp in Celsius
     TmaxX = 100;
     % Min operating temp in Celsius
@@ -361,9 +363,29 @@ toc
 % Results output
 %-------------------------------------------
 
+%5,38 xfmer
+%5,27 ind
+
+% Deletes rows of zeros, and then sorts by weight
+XfmerDesignArray = ResultX(~all(ResultX == 0, 2), :);
+XfmerDesignArray = sortrows(XfmerDesignArray,36,'descend');
+
+% Turns core geometry and material into their names from the sheet
+freqTable = readcell(corelossfile,'Sheet','Freq');
+sizeTable = readcell(coresizefile,'Sheet',coresizeSheetname);
+matNames = freqTable(2:end,2);
+geomNames = sizeTable(2:end,2);
+geomIndexes = XfmerDesignArray(1:end,38);
+matIndexes = XfmerDesignArray(1:end,5);
+fullmatNames = matNames(matIndexes);
+fullgeomNames = geomNames(geomIndexes);
+XfmerDesignCellArr = num2cell(XfmerDesignArray);
+XfmerDesignCellArr(:,5) = fullmatNames;
+XfmerDesignCellArr(:,38) = fullgeomNames;
+
 % Results for transformer and the column names are passed here.
-XfmerDesignTable = array2table(ResultX,'VariableNames',{'Po_W','Vppeak_V',...
-    'Vspeak_V','fs_Hz','matno','CoreMatFreq_Hz',...
+XfmerDesignTable = cell2table(XfmerDesignCellArr,'VariableNames',{'Po_W','Vppeak_V',...
+    'Vspeak_V','fs_Hz','Core Material','CoreMatFreq_Hz',...
     'NumOfPri','NumOfSec',...
     'BcoreDensity_T','WirePriDia_AWG','WirePriFullDia_m','WireSecDia_AWG',...
     'WireSecFullDia_m','WirePri_Idensity_A/m2','WireSecIdensity_A/m2',...
@@ -371,51 +393,58 @@ XfmerDesignTable = array2table(ResultX,'VariableNames',{'Po_W','Vppeak_V',...
     'WireSec_per_layer', 'WireSec_Nlayer','Ns1','Ns2','Ns3','Ns4','CopperPackingFactor',...
     'PackingFactor', 'LossCore_W','LossCopper_W' , 'WeightCore_g','WeightPri_copper_g',...
     'WeightPri_Insu_g', 'WeightSec_copper_g', 'WeightSec_Insu_g', 'WeightCore_Insu_g',...
-    'TotalWeight_g', 'TempAbsolute_C','CoreIndex','Volume_m^3'});
-% Deletes rows of zeros, and then sorts by weight
-arrX = table2array(XfmerDesignTable);
-XfmerDesignTable = XfmerDesignTable(~all(arrX == 0, 2), :);
-XfmerDesignTable = sortrows(XfmerDesignTable,"TotalWeight_g","ascend");
-% Results are written to excel file and sheet
+    'TotalWeight_g', 'TempAbsolute_C','Core Geometry','Volume_m^3'});
 
+
+
+% Results are written to excel file and sheet
 xcelX = readcell(filename_xfmer,'Sheet',ResultDatasheetname);
 [row,col] = size(xcelX);
 writecell(repmat({''},row,col),filename_xfmer,'Sheet',ResultDatasheetname);
-
 writetable(XfmerDesignTable,filename_xfmer,'Sheet',ResultDatasheetname);
-Xfinal = readcell(filename_xfmer,'Sheet',ResultDatasheetname);
 
-if size(Xfinal,1)>=2
-    weightX = Xfinal{2,36};
+if size(XfmerDesignTable,1)>=2
+    weightX = XfmerDesignTable{2,36};
 else
     weightX = 0;
 end
 fprintf("Transformer Weight is %.2f g",weightX);
 
+% Deletes rows of zeros, and then sorts by weight
+InductorDesignArray = ResultL(~all(ResultL == 0, 2), :);
+InductorDesignArray = sortrows(InductorDesignArray,36,'descend');
+
+% Turns core geometry and material into their names from the sheet
+freqTableL = readcell(corelossfile,'Sheet','Freq');
+sizeTableL = readcell(coresizefile,'Sheet',coresizeSheetname);
+matNamesL = freqTableL(2:end,2);
+geomNamesL = sizeTableL(2:end,2);
+geomIndexesL = InductorDesignArray(1:end,27);
+matIndexesL = InductorDesignArray(1:end,5);
+fullmatNamesL = matNamesL(matIndexesL);
+fullgeomNamesL = geomNamesL(geomIndexesL);
+InductorDesignCellArr = num2cell(InductorDesignArray);
+InductorDesignCellArr(:,5) = fullmatNamesL;
+InductorDesignCellArr(:,27) = fullgeomNamesL;
+
 % Results for inductor and the column names are passed here.
 InductorDesignTable = array2table(ResultL,'VariableNames',{'PoW','Vin_V',...
-    'Vpri_V','fs_Hz','matno','CoreMatFreq_Hz','NumOfPri','BcoreDensity_T', ...
+    'Vpri_V','fs_Hz','Core Material','CoreMatFreq_Hz','NumOfPri','BcoreDensity_T', ...
     'WirePriDia_AWG','WirePriFullDia_m','WirePri_Idensity_Aperm2', ...
     'WirePriNstrands','WirePri_per_layer','WirePri_Nlayer',...
     'CopperPackingFactor', 'PackingFactor','LossCore_W',...
     'LossCopper_W','WeightCore_g', 'WeightPri_copper_g','WeightPri_Insu_g',...
-    'WeightCore_Insu_g','TotalWeight_g','TempAbsolute_C','L', 'airgap_m', 'CoreIndex',...
+    'WeightCore_Insu_g','TotalWeight_g','TempAbsolute_C','L', 'airgap_m', 'Core Geometry',...
     'Q','f0', 'A', 'K', 'RT', 'Ls', 'Cs', 'Cp', 'GT','Volume_m^3'});
-% Deletes rows of zeros, and then sorts by weight
-arrL = table2array(InductorDesignTable);
-InductorDesignTable = InductorDesignTable(~all(arrL == 0, 2), :);
-InductorDesignTable = sortrows(InductorDesignTable,"TotalWeight_g","ascend");
-% Results are written to excel file and sheet
 
 xcelL = readcell(filename_inductor,'Sheet',ResultDatasheetname);
 [row,col] = size(xcelL);
 writecell(repmat({''},row,col),filename_inductor,'Sheet',ResultDatasheetname);
 
 writetable(InductorDesignTable,filename_inductor,'Sheet',ResultDatasheetname);
-Lfinal = readcell(filename_inductor,'Sheet',ResultDatasheetname);
 
-if size(Lfinal,1)>=2
-    weightL = Lfinal{2,23};
+if size(InductorDesignTable,1)>=2
+    weightL = InductorDesignTable{2,23};
 else 
     weightL = 0;
 end
