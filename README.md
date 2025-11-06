@@ -15,10 +15,20 @@ This is a script modified from the 2020 thesis by Yiou He: "Towards High Voltage
 
 ## Current issues I have identified: (delete as needed)
 - I'm not entirely sure why the relative permeability of each material is fixed, and where the numbers come from.
--  Make the RTC script match the inductor and transformer design script so that every iteration of the loop writes to a row of the final design instead of to a global variable.
--  General fixes need to be performed on the RTC script to get it working.
--  Need to ensure realism of inductor data through cross-checking with more of the thesis results. Transformer comparison has already been done and is in the comparison .xlsx file.
 -  A big issue is that between results, I need to change ranges like the max layers, increment Q factor, etc. not because they are important parameters for me, but because I can't have them too high due to memory limitations and I can't have them too low to risk missing designs.
+-  Something is wrong with double-leg window area calculation for the transformer
+-  To stop the constant parameter adjustment, I should have another for-loop that checks which parameter was the bottleneck, and expands it only then to
+iterate until REAL hard bounds that cannot be surpassed. I'm thinking things like winding number, incremental winding, Q, A, K, input voltage, etc.
+should be SOFT requirements that can be expanded, and then things like weight and temperature and freq and output voltage could be HARD
+requirements that cannot be surpassed. Currently there are too many things to change.
+- Right now this takes input for max number of windings, min number of windings, incremental from min to max, for pri and sec of transformer and the inductor to sweep from. It also does the same for layers on pri and sec of transformer and on the inductor. I think this is too much, and that there has to be some way for the script to find the optimal layers on pri and sec and windings on pri and sec without needing to manually input them as a range to evaluate matrices with. Could I somehow back-calculate optimal values for these with a few steps, with only the hard minimums and maximums for each entered by the user, but not expanding n-dimensional matrices for each of those points? what strategies could be used for this?
+- I also think the script should iterate once for each winding pattern, and using interlayer tape or not, and possibly some other ranges. This would
+extend runtime, but would make user interfacing a lot easier.
+- I want to use steinmetz better for each material. Instead of extrapolating,
+maybe import the curves somehow? Or derive the exponents?
+- Need to make a capacitor weight section, at low frequencies it's not
+negligible
+- Be more accurate with the interlayer tape thickness (over-rating), enamel (under-rating, thickness, and breakdown voltage), and include bobbin subtraction from window area.
 
 ## Recent changes:
 - Added RTC boost original (as close as I can) schematic files, manually copied in.
