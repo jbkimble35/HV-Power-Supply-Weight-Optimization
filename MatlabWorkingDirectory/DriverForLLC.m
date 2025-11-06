@@ -1,8 +1,8 @@
 clc, clf, clear
 
-corelossfile = 'CoreLossDataOLD.xlsx';
+corelossfile = 'CoreLossData.xlsx';
 coresizefile = 'CoreSizeData.xlsx';
-coresizeSheetname = 'OwnedCores';
+coresizeSheetname = 'Ecore';
 
 raw1 = readcell(corelossfile,'Sheet','Freq');
 raw2 = readcell(corelossfile,'Sheet','Bfield');
@@ -18,53 +18,18 @@ raw = readcell(coresizefile,'Sheet',coresizeSheetname);
 %% Parameters to Adjust
 %--------------------------------------------------------------------------
 
-% Something is wrong with double-leg window area calculation for the
-% transformer
-
 % Magnetizing inductance is assumed "large enough" as explained in the
 % thesis, with A being the capacitance parallel vs. series ratio i.e.
 % the inductance leakage vs. magnetizing ratio.
-
-%{ 
-To stop the constant parameter adjustment, I should have another for-loop 
-that checks which parameter was the bottleneck, and expands it only then to
-iterate until REAL hard bounds that cannot be surpassed. I'm thinking
-things like winding number, incremental winding, Q, A, K, input voltage, etc.
-should be SOFT requirements that can be expanded, and then things like
-weight and temperature and freq and output voltage could be HARD
-requirements that cannot be surpassed. Currently there are too many things
-to change.
-
-Right now this takes input for max number of windings, min number of windings,
-incremental from min to max, for pri and sec of transformer and the inductor 
-to sweep from. It also does the same for layers on pri and sec of transformer 
-and on the inductor. I think this is too much, and that there has to be some 
-way for the script to find the optimal layers on pri and sec and windings on 
-pri and sec without needing to manually input them as a range to evaluate 
-matrices with. Could I somehow back-calculate optimal values for these with a 
-few steps, with only the hard minimums and maximums for each entered by the user, 
-but not expanding n-dimensional matrices for each of those points? what strategies 
-could be used for this?
-
-I also think the script should iterate once for each winding pattern, and
-using interlayer tape or not, and possibly some other ranges. This would
-extend runtime, but would make user interfacing a lot easier.
-
-I want to use steinmetz better for each material. Instead of extrapolating,
-maybe import the curves somehow? Or derive the exponents?
-
-Be more accurate with the interlayer tape thickness (over-rating), enamel
-(under-rating, thickness, and breakdown voltage), and include bobbin
-subtraction from window area.
-
-
-%}
 
 Date = '10-14-25';
 % Quality factor
 Q_range = 0.2:0.1:1;
 % Resonant frequency
-f0_range = 12000;
+f0_range = 100000;
+% frequency of the transformer
+fs_range = f0_range;
+
 % Capacitance ratio (inverse of inductance ratio) (shouldn't be lower than 0.1,
 % since ZVS bandwidth becomes too small)
 A_range = linspace(0.1,1,10);
@@ -75,9 +40,7 @@ Vin_range = 5;
 % peak to peak is 2x this value
 Vo_range = 20;
 % Output power desired (W)
-Po_range = 10;
-% frequency of the transformer
-fs_range = 12000;
+Po_range = 5;
 % Turns ratio secondary/primary
 K_range = 1:1:5;
 
@@ -363,12 +326,9 @@ toc
 % Results output
 %-------------------------------------------
 
-%5,38 xfmer
-%5,27 ind
-
 % Deletes rows of zeros, and then sorts by weight
 XfmerDesignArray = ResultX(~all(ResultX == 0, 2), :);
-XfmerDesignArray = sortrows(XfmerDesignArray,36,'descend');
+XfmerDesignArray = sortrows(XfmerDesignArray,36,'ascend');
 
 % Turns core geometry and material into their names from the sheet
 freqTable = readcell(corelossfile,'Sheet','Freq');
@@ -412,7 +372,7 @@ fprintf("Transformer Weight is %.2f g",weightX);
 
 % Deletes rows of zeros, and then sorts by weight
 InductorDesignArray = ResultL(~all(ResultL == 0, 2), :);
-InductorDesignArray = sortrows(InductorDesignArray,36,'descend');
+InductorDesignArray = sortrows(InductorDesignArray,23,'ascend');
 
 % Turns core geometry and material into their names from the sheet
 freqTableL = readcell(corelossfile,'Sheet','Freq');
@@ -428,7 +388,7 @@ InductorDesignCellArr(:,5) = fullmatNamesL;
 InductorDesignCellArr(:,27) = fullgeomNamesL;
 
 % Results for inductor and the column names are passed here.
-InductorDesignTable = array2table(ResultL,'VariableNames',{'PoW','Vin_V',...
+InductorDesignTable = cell2table(InductorDesignCellArr,'VariableNames',{'PoW','Vin_V',...
     'Vpri_V','fs_Hz','Core Material','CoreMatFreq_Hz','NumOfPri','BcoreDensity_T', ...
     'WirePriDia_AWG','WirePriFullDia_m','WirePri_Idensity_Aperm2', ...
     'WirePriNstrands','WirePri_per_layer','WirePri_Nlayer',...
