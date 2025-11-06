@@ -374,7 +374,8 @@ else
     % --------------------
     
     CoreInsulationThickness = Vinsulation_max./dielectricstrength_insulation;
-    % Why is this calculated here and in the winding pattern part?
+    % Why is this calculated here and in the winding pattern part? I
+    % deleted that one, which also had Sec_PerLayer calculated as half
     Pri_PerLayer=floor(Np./Mlp);
     Sec_PerLayer=floor(Ns./Mls);
 
@@ -401,8 +402,6 @@ else
 
     switch Winding_Pattern
         case 1 % center leg ----------------
-            % Secondary turns per layer
-            Sec_PerLayer = floor(Ns./Mls);
 
             Ns_group1 = floor((H - 2.*CoreInsulationThickness)./Sec_FullWireDia);
             Ns_group2 = zeros(size(Ns_group1));
@@ -448,8 +447,6 @@ else
                 + 0.5.*( Mls(isUR).*Sec_FullWireDia(isUR) + tTapeSec(isUR) ) );
 
         case 2 % double leg ----------------
-            % Only consider half because symmetric
-            Sec_PerLayer = floor(Ns./2./Mls);
 
             % Secondary group counts
             Ns_group1 = zeros(size(Sec_PerLayer));
